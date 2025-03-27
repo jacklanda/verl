@@ -20,8 +20,8 @@ def parse_generation(prediction: str) -> List[str]:
     parsed_answer = ""
     for regex in regex_list:
         match = re.search(regex, prediction, re.DOTALL)
-        if match and match.group(1):
-            parsed_answer = match.group(1)
+        if match and match.group(-1):
+            parsed_answer = match.group(-1)
             break
         parsed_answers.append(parsed_answer.strip())
 

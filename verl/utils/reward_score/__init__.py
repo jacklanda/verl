@@ -47,6 +47,9 @@ def _default_compute_score(data_source, prompt, solution_str, ground_truth, extr
     elif data_source in ["StrategyQA"]:
         from . import strategyqa
         res, eval_result = strategyqa.compute_score(prompt, solution_str, ground_truth)
+    elif data_source in ["ProntoQA"]:
+        from . import prontoqa
+        res, eval_result = prontoqa.compute_score(prompt, solution_str, ground_truth)
     else:
         raise NotImplementedError
 

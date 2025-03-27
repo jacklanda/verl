@@ -385,8 +385,6 @@ def validate_answer_format(passage: str) -> bool:
 def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, float]]:
     """The scoring function for LawGPT.
 
-    Reference: Trung, Luong, et al. "Reft: Reasoning with reinforced fine-tuning." Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). 2024.
-
     Args:
         prompt: the prompt text
         solution_str: the solution text

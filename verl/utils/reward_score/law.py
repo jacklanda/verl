@@ -48,6 +48,14 @@ def compute_meteor(
 
 
 def grade_generation_length(given_answer: str) -> float:
+    """Grade the length of the given answer.
+
+    Args:
+        given_answer (str): The answer to evaluate
+
+    Returns:
+        float: Reward value based on the length of the answer
+    """
     if len(given_answer) < 64:
         return -0.5
     elif len(given_answer) < 128:
@@ -60,6 +68,15 @@ def grade_generation_length(given_answer: str) -> float:
 
 
 def grade_language_monotony(given_answer: str, language: str = "zh") -> bool:
+    """Grade the language monotony of the given answer.
+
+    Args:
+        given_answer (str): The answer to evaluate
+        language (str): Language code, default "zh" for Chinese
+
+    Returns:
+        bool: True if the answer is not monotonous, False otherwise
+    """
     if language == "zh":
         target_language = "CHINESE"
     elif language == "en":
@@ -311,6 +328,15 @@ def parse_generation(
 
 
 def extract_solution(solution_str, method="strict"):
+    """extract the final answer from the solution string.
+
+    Args:
+        solution_str (str): the solution string
+        method (str, optional): the extraction method. Defaults to "strict".
+
+    Returns:
+        str: the final answer
+    """
     assert method in ["strict", "flexible"]
 
     if method == "strict":
@@ -339,6 +365,14 @@ def extract_solution(solution_str, method="strict"):
 
 
 def validate_answer_format(passage: str) -> bool:
+    """validate the format of the answer.
+
+    Args:
+        passage (str): the passage to validate
+
+    Returns:
+        bool: True if the format is valid, False otherwise
+    """
     if "[刑期]" not in passage and "[金额]" not in passage:
         return False
     if "<think>" not in passage or "</think>" not in passage:
@@ -349,16 +383,17 @@ def validate_answer_format(passage: str) -> bool:
 
 
 def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, float]]:
-    """The scoring function for GSM8k.
+    """The scoring function for LawGPT.
 
     Reference: Trung, Luong, et al. "Reft: Reasoning with reinforced fine-tuning." Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). 2024.
 
     Args:
+        prompt: the prompt text
         solution_str: the solution text
         ground_truth: the ground truth
-        method: the method to extract the solution, choices are 'strict' and 'flexible'
-        format_score: the score for the format
-        score: the score for the correct answer
+
+    Returns:
+        Tuple[float, Dict[str, float]]: the reward score and the evaluation result
     """
     solution_str = (
         solution_str.rsplit("<|im_end|>", 1)[-1]
@@ -389,34 +424,34 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
 
     # Step 0. Check if the model response is valid
     if validate_answer_format(solution_str) is False:
-        eval_result["format_rewards"] = 0.
+        eval_result["format_rewards"] = 0.0
         # if "<think>" in solution_str and "</think>" in solution_str:
-            # eval_result["format_rewards"] = 0.0
+        # eval_result["format_rewards"] = 0.0
         # elif "<think>" in solution_str or "</think>" in solution_str:
-            # eval_result["format_rewards"] = -0.5
+        # eval_result["format_rewards"] = -0.5
         # elif "<answer>" in solution_str and "</answer>" in solution_str:
-            # eval_result["format_rewards"] = 0.0
+        # eval_result["format_rewards"] = 0.0
         # elif "<answer>" in solution_str or "</answer>" in solution_str:
-            # eval_result["format_rewards"] = -0.5
+        # eval_result["format_rewards"] = -0.5
         # else:
-            # eval_result["format_rewards"] = -0.5
+        # eval_result["format_rewards"] = -0.5
 
     # Check if the model response is too long or too short
     # eval_result["length_rewards"] = grade_generation_length(solution_str)
-    eval_result["length_rewards"] = 0.
+    eval_result["length_rewards"] = 0.0
 
     # Step 1. check the language monotony / repetition reward of the model response
     language_monotony_score = grade_language_monotony(solution_str, language="zh")
     if not language_monotony_score:
         # eval_result["language_monotony_rewards"] = -0.5
-        eval_result["language_monotony_rewards"] = 0.
+        eval_result["language_monotony_rewards"] = 0.0
 
     language_repetition_score = grade_language_repetition(
         solution_str, language="zh", ngram=1, tau=1.0, steepness=4.0
     )
     if language_repetition_score < -0.5:
         # eval_result["repetition_rewards"] = language_repetition_score
-        eval_result["repetition_rewards"] = 0.
+        eval_result["repetition_rewards"] = 0.0
 
     # Step 1. extract the answer from the model response
     if (
@@ -431,7 +466,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         or (solution_str.count("[刑期]") != 1 and solution_str.count("[金额]") != 1)
     ):
         # eval_result["format_rewards"] = -0.5
-        eval_result["format_rewards"] = 0.
+        eval_result["format_rewards"] = 0.0
 
     # Step 2. Process the ground truth(s)
     ground_truth = reference_answer

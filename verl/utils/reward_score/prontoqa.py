@@ -47,7 +47,9 @@ def thinking_reward(
     return thinking_factor
 
 
-def get_thinking_reward(processed_str: str, expected_names: List[str]) -> float:
+def get_thinking_reward(
+    processed_str: str, expected_names: List[str], temperature: float = 2.0
+) -> float:
     """
     Calculate the length and reflection rewards for the thinking part of the response
     """
@@ -56,9 +58,7 @@ def get_thinking_reward(processed_str: str, expected_names: List[str]) -> float:
 
     think_content = processed_str[think_start + len("<think>") : think_end]
 
-    thinking_factor = thinking_reward(think_content, expected_names)
-
-    return thinking_factor
+    return temperature * thinking_reward(think_content, expected_names)
 
 
 def format_reward(predict_str: str) -> float:
@@ -78,18 +78,6 @@ def format_reward(predict_str: str) -> float:
         answer_end_token_idx = predict_str.index("</answer>")
     except ValueError:
         answer_end_token_idx = -1
-    """
-    if "<think>" in predict_str and "</think>" in predict_str:
-        return 0.0
-    elif "<think>" in predict_str or "</think>" in predict_str:
-        return -0.5
-    elif "<answer>" in predict_str and "</answer>" in predict_str:
-        return 0.0
-    elif "<answer>" in predict_str or "</answer>" in predict_str:
-        return -0.5
-    else:
-        return -1.0
-    """
     if (
         think_begin_token_idx < think_end_token_idx
         and answer_begin_token_idx < answer_end_token_idx

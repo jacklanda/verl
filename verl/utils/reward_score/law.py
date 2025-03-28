@@ -260,8 +260,8 @@ def grade_law_solution_by_outcome(
     # exact match trial
     sample_type = "量刑" if "[刑期]" in label else "罚金"
 
-    parsed_pred = parse_generation([pred])[0]
-    parsed_label = parse_generation([label])[0]
+    parsed_pred = parse_generation(pred)
+    parsed_label = parse_generation(label)
     # print(f"parsed_pred: {parsed_pred}, parsed_label: {parsed_label}")
 
     if parsed_pred == "" or parsed_label == "":
@@ -340,13 +340,11 @@ def grade_law_solution_by_process(
     return False
 
 
-def parse_generation(
-    preds: List[str],
-) -> List[str]:
+def parse_generation(prediction: str) -> str:
     """parse the generated texts to extract the final answer.
 
     Args:
-        preds (List[str]): generated texts
+        prediction (str): the generated text
 
     Returns:
         List[str]: parsed texts
@@ -357,26 +355,24 @@ def parse_generation(
         r"<answer>[\\n]*\[刑期\](.*?)[\\n]*</answer>"
         r"<answer>[\\n]*\[金额\](.*?)[\\n]*</answer>",
     ]
-    parsed_answers = []
-    for pred in preds:
-        parsed_answer = ""
-        for regex in regex_list:
-            match = re.findall(regex, pred)
-            if len(match) > 0:
-                # pick the last match as the parsed answer
-                parsed_answer = match[-1]
-                break
-        if parsed_answer.strip() == "":
-            # if no match found, use the whole text as the parsed answer
-            parsed_answer = (
-                pred.rsplit("<answer>", 1)[-1]
-                .rsplit("</answer>", 1)[0]
-                .strip("[刑期]")
-                .strip("[金额]")
-            )
-        parsed_answers.append(parsed_answer.strip())
+    parsed_answer = ""
+    for regex in regex_list:
+        match = re.findall(regex, prediction)
+        if len(match) > 0:
+            # pick the last match as the parsed answer
+            parsed_answer = match[-1]
+            break
+    if parsed_answer.strip() == "":
+        # if no match found, use the whole text as the parsed answer
+        parsed_answer = (
+            prediction.rsplit("<answer>", 1)[-1]
+            .rsplit("</answer>", 1)[0]
+            .strip("[刑期]")
+            .strip("[金额]")
+            .strip()
+        )
 
-    return parsed_answers
+    return parsed_answer
 
 
 def extract_solution(solution_str, method="strict"):
@@ -434,7 +430,36 @@ def validate_answer_format(passage: str) -> bool:
     return True
 
 
-def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, float]]:
+def format_reward(predict_str: str) -> float:
+    try:
+        think_begin_token_idx = predict_str.index("<think>")
+    except ValueError:
+        think_begin_token_idx = -1
+    try:
+        think_end_token_idx = predict_str.index("</think>")
+    except ValueError:
+        think_end_token_idx = -1
+    try:
+        answer_begin_token_idx = predict_str.index("<answer>")
+    except ValueError:
+        answer_begin_token_idx = -1
+    try:
+        answer_end_token_idx = predict_str.index("</answer>")
+    except ValueError:
+        answer_end_token_idx = -1
+    if (
+        think_begin_token_idx < think_end_token_idx
+        and answer_begin_token_idx < answer_end_token_idx
+        and think_end_token_idx < answer_begin_token_idx
+    ):
+        return 0.0
+    else:
+        return -1.0
+
+
+def compute_score(
+    prompt: str, solution_str: str, ground_truth: str
+) -> Tuple[float, Dict[str, float]]:
     """The scoring function for LawGPT.
 
     Args:
@@ -451,8 +476,8 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         .rsplit("<|endoftext|>", 1)[0]
         .strip()
     )  # output
-    predicted_answer = parse_generation([solution_str])[0]
-    reference_answer = parse_generation([ground_truth])[0]
+    predicted_answer = parse_generation(solution_str)
+    reference_answer = parse_generation(ground_truth)
 
     eval_result = {
         "input": prompt,
@@ -471,21 +496,9 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         "soft_exact_match": 0,
         "hard_exact_match": 0,
     }
-    model_answer = solution_str
 
     # Step 0. Check if the model response is valid
-    if validate_answer_format(solution_str) is False:
-        eval_result["format_rewards"] = 0.0
-        # if "<think>" in solution_str and "</think>" in solution_str:
-        # eval_result["format_rewards"] = 0.0
-        # elif "<think>" in solution_str or "</think>" in solution_str:
-        # eval_result["format_rewards"] = -0.5
-        # elif "<answer>" in solution_str and "</answer>" in solution_str:
-        # eval_result["format_rewards"] = 0.0
-        # elif "<answer>" in solution_str or "</answer>" in solution_str:
-        # eval_result["format_rewards"] = -0.5
-        # else:
-        # eval_result["format_rewards"] = -0.5
+    eval_result["format_rewards"] = format_reward(solution_str)
 
     # Check if the model response is too long or too short
     # eval_result["length_rewards"] = grade_generation_length(solution_str)
@@ -510,11 +523,11 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         or predicted_answer == ""
         or reference_answer is None
         or reference_answer == ""
-        or solution_str.count("<think>") != 1
-        or solution_str.count("</think>") != 1
-        or solution_str.count("<answer>") != 1
-        or solution_str.count("</answer>") != 1
-        or (solution_str.count("[刑期]") != 1 and solution_str.count("[金额]") != 1)
+        # or solution_str.count("<think>") != 1
+        # or solution_str.count("</think>") != 1
+        # or solution_str.count("<answer>") != 1
+        # or solution_str.count("</answer>") != 1
+        # or (solution_str.count("[刑期]") != 1 and solution_str.count("[金额]") != 1)
     ):
         # eval_result["format_rewards"] = -0.5
         eval_result["format_rewards"] = 0.0
@@ -549,20 +562,20 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
     # (Add float range for soft match: Penalty: +/- 3 month)
     for ground_truth in processed_ground_truths:
         is_soft_correct = grade_law_solution_by_outcome(
-            model_answer,
+            solution_str,
             ground_truth,
             enable_soft_match=True,
             enable_fuzzy_match=False,
-        ) or grade_law_solution_by_process(model_answer, ground_truth)
+        ) or grade_law_solution_by_process(solution_str, ground_truth)
         if is_soft_correct:
             eval_result["correctness_rewards"] = 1.0
             eval_result["soft_exact_match"] += 1.0
             is_hard_correct = grade_law_solution_by_outcome(
-                model_answer,
+                solution_str,
                 ground_truth,
                 enable_soft_match=False,
                 enable_fuzzy_match=False,
-            ) or grade_law_solution_by_process(model_answer, ground_truth)
+            ) or grade_law_solution_by_process(solution_str, ground_truth)
             if is_hard_correct:
                 eval_result["hard_exact_match"] += 1.0
             break

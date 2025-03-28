@@ -597,7 +597,11 @@ class RayPPOTrainer(object):
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
             metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
-            metric_dict["val/correctness_rewards"] = round(float(np.mean(rewards).item()), 5)
+            metric_dict["val/correctness_rewards"] = round(
+                sum([item["correctness_rewards"] for item in eval_results])
+                / len(eval_results),
+                5,
+            )
             metric_dict["val/format_rewards"] = round(
                 sum([item["format_rewards"] for item in eval_results])
                 / len(eval_results),

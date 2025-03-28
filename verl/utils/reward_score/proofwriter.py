@@ -196,7 +196,7 @@ def compute_score(
     language_repetition_score = grade_language_repetition(
         predict_str, language="en", ngram=1, tau=1.0, steepness=4.0
     )
-    thinking_reward_score = get_thinking_reward(predict_str, ["wait"])
+    thinking_rewards = get_thinking_reward(predict_str, ["wait"])
     eval_result = {
         "input": prompt,
         "output": predict_str,
@@ -206,7 +206,7 @@ def compute_score(
         # "meteor": meteor_score,
         "format_rewards": format_reward_score,
         "length_rewards": 0,
-        "thinking_rewards": thinking_reward_score,
+        "thinking_rewards": thinking_rewards,
         "unk_error_rewards": 0,
         "repetition_rewards": language_repetition_score,
         "language_monotony_rewards": 0,
@@ -218,7 +218,7 @@ def compute_score(
     rewards = (
         acc_reward_score
         + format_reward_score
-        + thinking_reward_score
+        + thinking_rewards
         + language_repetition_score
     )
 

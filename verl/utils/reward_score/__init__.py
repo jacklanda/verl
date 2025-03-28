@@ -50,6 +50,9 @@ def _default_compute_score(data_source, prompt, solution_str, ground_truth, extr
     elif data_source in ["ProntoQA"]:
         from . import prontoqa
         res, eval_result = prontoqa.compute_score(prompt, solution_str, ground_truth)
+    elif data_source in ["ProofWriter"]:
+        from . import proofwriter
+        res, eval_result = proofwriter.compute_score(prompt, solution_str, ground_truth)
     else:
         raise NotImplementedError
 

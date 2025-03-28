@@ -115,9 +115,9 @@ class NaiveRewardManager:
 
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
-                print("[prompt]", prompt_str)
-                print("[response]", response_str)
-                print("[ground_truth]", ground_truth)
+                print("[prompt]", " ".join(prompt_str.split()))
+                print("[response]", " ".join(response_str.split()))
+                print("[ground_truth]", " ".join(ground_truth.split()))
                 print("[score]", score)
 
         return reward_tensor, eval_results

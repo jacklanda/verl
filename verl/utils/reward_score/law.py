@@ -463,6 +463,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         # "meteor": meteor_score,
         "format_rewards": 0,
         "length_rewards": 0,
+        "thinking_rewards": 0,
         "unk_error_rewards": 0,
         "repetition_rewards": 0,
         "language_monotony_rewards": 0,
@@ -518,6 +519,9 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         # eval_result["format_rewards"] = -0.5
         eval_result["format_rewards"] = 0.0
 
+    # grade the thinking part of the response
+    eval_result["thinking_rewards"] = get_thinking_reward(solution_str, ["法条"])
+
     # Step 2. Process the ground truth(s)
     ground_truth = reference_answer
     # keywords for process supervision
@@ -570,6 +574,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         # set all other rewards to 0 if the answer is correct
         eval_result["format_rewards"] = 0
         eval_result["length_rewards"] = 0
+        eval_result["thinking_rewards"] = 0
         eval_result["unk_error_rewards"] = 0
         eval_result["repetition_rewards"] = 0
         eval_result["language_monotony_rewards"] = 0

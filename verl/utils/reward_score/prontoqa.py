@@ -47,7 +47,7 @@ def thinking_reward(
     return thinking_factor
 
 
-def get_thinking_reward(processed_str: str, expected_names: List) -> float:
+def get_thinking_reward(processed_str: str, expected_names: List[str]) -> float:
     """
     Calculate the length and reflection rewards for the thinking part of the response
     """

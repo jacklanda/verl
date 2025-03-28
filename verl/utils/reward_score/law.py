@@ -1,6 +1,6 @@
 import re
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from evaluate import load
 from thefuzz.fuzz import ratio
@@ -282,6 +282,58 @@ def grade_law_solution_by_outcome(
     return False
 
 
+def thinking_reward(
+    processed_str: str, expected_names: Optional[List[str]] = None
+) -> float:
+    """
+    Calculate the reward value of the text length, ranging from 0 to 0.2.
+    The longer the text, the higher the reward, but the use of a logarithmic function makes the marginal benefits of too long texts decrease.
+    """
+    thinking_factor = 0.1
+
+    try:
+        import jieba
+
+        words = list(jieba.cut(processed_str))
+    except ImportError:
+        # Fallback: simple character-based tokenization for Chinese
+        words = list(processed_str)
+
+    word_count = len(words)
+
+    if word_count < 128:
+        # avoid reward hacking
+        return math.log(max(1, word_count)) * 0.05
+
+    if expected_names is not None:
+        for item in expected_names:
+            if item not in processed_str:
+                thinking_factor *= 0.5
+
+    # reflection_tokens = ["wait", "verify", "yet", "re-evaluate", "review"]
+    reflection_tokens = []
+
+    for token in reflection_tokens:
+        if token not in processed_str:
+            thinking_factor -= 0.001
+
+    return thinking_factor
+
+
+def get_thinking_reward(processed_str: str, expected_names: List[str]) -> float:
+    """
+    Calculate the length and reflection rewards for the thinking part of the response
+    """
+    think_start = processed_str.find("<think>")
+    think_end = processed_str.find("</think>")
+
+    think_content = processed_str[think_start + len("<think>") : think_end]
+
+    thinking_factor = thinking_reward(think_content, expected_names)
+
+    return thinking_factor
+
+
 def grade_law_solution_by_process(
     given_answers: List[str], ground_truths: List[str]
 ) -> bool:
@@ -451,7 +503,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         # eval_result["repetition_rewards"] = language_repetition_score
         eval_result["repetition_rewards"] = 0.0
 
-    # Step 1. extract the answer from the model response
+    # Step 1. grade the format of the model response
     if (
         predicted_answer is None
         or predicted_answer == ""
@@ -490,7 +542,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         eval_result["unk_error_rewards"] = -0.5
 
     # Step 4. Check if the answer is correct against all possible correct answers
-    # (Add float range for soft match: Penalty: +/- 3 month, Money: +/- 1000 RMB)
+    # (Add float range for soft match: Penalty: +/- 3 month)
     for ground_truth in processed_ground_truths:
         is_soft_correct = grade_law_solution_by_outcome(
             model_answer,
@@ -509,12 +561,12 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
             ) or grade_law_solution_by_process(model_answer, ground_truth)
             if is_hard_correct:
                 eval_result["hard_exact_match"] += 1.0
+            break
 
     # Step 5. If all else fails, assign incorrect reward and return
     if eval_result["correctness_rewards"] == 0:
         eval_result["correctness_rewards"] = -1.0
     elif eval_result["correctness_rewards"] == 1:
-        # pass
         # set all other rewards to 0 if the answer is correct
         eval_result["format_rewards"] = 0
         eval_result["length_rewards"] = 0
@@ -522,7 +574,7 @@ def compute_score(prompt, solution_str, ground_truth) -> Tuple[float, Dict[str, 
         eval_result["repetition_rewards"] = 0
         eval_result["language_monotony_rewards"] = 0
 
-    # Step 7. Aggregate rewards and return
+    # Step 6. Aggregate rewards and return
     reward = aggregate_rewards(eval_result)
 
     # return 0.9 * acc_reward(predict_str, ground_truth) + 0.1 * format_reward(predict_str)

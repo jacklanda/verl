@@ -589,8 +589,11 @@ class RayPPOTrainer(object):
                 data_source_reward[data_source] = []
             data_source_reward[data_source].append(reward_tensor[i].item())
 
-        os.makedirs(f"outputs/eval/{self.eval_dir}", exist_ok=True)
-        with open(f"outputs/eval/{self.eval_dir}/eval_{self.eval_times}.json", "w") as f:
+        # get the data_source as default in the first item in the batch
+        data_source = data_sources[0]
+        eval_dir = self.eval_dir.replace("eval-", f"{data_source}-eval-")
+        os.makedirs(eval_dir, exist_ok=True)
+        with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
             json.dump(eval_results, f, ensure_ascii=False, indent=4)
             self.eval_times += 1
 

@@ -615,6 +615,11 @@ class RayPPOTrainer(object):
                 / len(eval_results),
                 5,
             )
+            metric_dict["val/thinking_rewards"] = round(
+                sum([item["thinking_rewards"] for item in eval_results])
+                / len(eval_results),
+                5,
+            )
             metric_dict["val/repetition_rewards"] = round(
                 sum([item["repetition_rewards"] for item in eval_results])
                 / len(eval_results),

@@ -37,7 +37,8 @@ parser.add_argument("--hf_upload_path", default=False, type = str, help="The pat
 parser.add_argument("--test", action="store_true", help="test correctness of hf_model")
 parser.add_argument("--test_hf_dir", type = str, required=False, help="test correctness of hf_model, , with hf_model in checkpoint.contents")
 args = parser.parse_args()
-os.makedirs(args.target_dir, exist_ok=True)
+target_dir = args.target_dir if args.target_dir != "tmp" else args.local_dir.rsplit("/", 2)[0] + "/best_ckpt"
+os.makedirs(target_dir, exist_ok=True)
 if args.test:
     assert args.test_hf_dir is not None, f'You must run verl save checkpoint first, with hf_model in checkpoint.contents, and provide the directory here'
 
@@ -161,7 +162,7 @@ def convert_fsdp_checkpoints_to_hfmodels():
     if args.target_dir is None:
         hf_path = os.path.join(local_dir, 'huggingface')
     else:
-        hf_path = args.target_dir
+        hf_path = target_dir
     config = AutoConfig.from_pretrained(args.hf_model_path)
     tokenizer = AutoTokenizer.from_pretrained(args.hf_model_path)
 
@@ -372,7 +373,7 @@ def convert_megatron_checkpoints_to_hfmodes():
     if args.target_dir is None:
         hf_path = os.path.join(args.local_dir, 'huggingface')
     else:
-        hf_path = args.target_dir
+        hf_path = target_dir
 
     if 'ForTokenClassification' in config.architectures[0]:
         auto_model = AutoModelForTokenClassification

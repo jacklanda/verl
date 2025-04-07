@@ -833,7 +833,8 @@ class RayPPOTrainer(object):
         logger = Tracking(project_name=self.config.trainer.project_name,
                           experiment_name=self.config.trainer.experiment_name,
                           default_backend=self.config.trainer.logger,
-                          config=OmegaConf.to_container(self.config, resolve=True))
+                          config=OmegaConf.to_container(self.config, resolve=True),
+                          run_id=self.config.trainer.run_id)
 
         self.global_steps = 0
 

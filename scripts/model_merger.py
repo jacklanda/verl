@@ -17,7 +17,7 @@ import re
 import os
 import torch
 import argparse
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForTokenClassification, AutoModelForVision2Seq
+from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM, AutoModelForTokenClassification, AutoModelForVision2Seq
 from concurrent.futures import ThreadPoolExecutor
 from torch.distributed._tensor import DTensor, Shard, Placement
 from safetensors.torch import load_file
@@ -161,6 +161,7 @@ def convert_fsdp_checkpoints_to_hfmodels():
     else:
         hf_path = args.target_dir
     config = AutoConfig.from_pretrained(args.hf_model_path)
+    tokenizer = AutoTokenizer.from_pretrained(args.hf_model_path)
 
     if 'ForTokenClassification' in config.architectures[0]:
         auto_model = AutoModelForTokenClassification
@@ -174,6 +175,9 @@ def convert_fsdp_checkpoints_to_hfmodels():
     with torch.device('meta'):
         model = auto_model.from_config(config, torch_dtype=torch.bfloat16)
     model.to_empty(device='cpu')
+
+    print(f"Saving tokenizer to {hf_path}")
+    tokenizer.save_pretrained(hf_path)
 
     print(f'Saving model to {hf_path}')
     model.save_pretrained(hf_path, state_dict=state_dict)

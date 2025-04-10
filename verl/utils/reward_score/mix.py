@@ -182,17 +182,24 @@ def grade_language_repetition(
     return scaled_reward
 
 
-def acc_reward(predict_str: str, ground_truth: str) -> float:
-    answer = parse_generation(predict_str)
-    ground_truth = parse_generation(ground_truth)
-    return 1.0 if answer.lower() == ground_truth.lower() else 0.0
+def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
+    if data_source in ["ProntoQA", "ProofWriter"]:
+        answer = parse_generation(predict_str)
+        ground_truth = parse_generation(ground_truth)
+        return 1.0 if answer.lower() == ground_truth.lower() else 0.0
+    elif data_source == "Natural Reasoning":
+        pass
+    elif data_source == "Clutrr":
+        pass
+    elif data_source == "Boxes":
+        pass
 
 
 def compute_score(
     prompt: str, predict_str: str, ground_truth: str, **kwargs
 ) -> Tuple[float, Dict[str, Any]]:
     data_source = kwargs.get("data_source", "mix")
-    acc_reward_score = acc_reward(predict_str, ground_truth)
+    acc_reward_score = acc_reward(predict_str, ground_truth, data_source)
     format_reward_score = format_reward(predict_str)
     language_repetition_score = grade_language_repetition(
         predict_str, language="en", ngram=1, tau=1.0, steepness=4.0
@@ -207,11 +214,11 @@ def compute_score(
         "reference_answer": parse_generation(ground_truth),
         # "meteor": meteor_score,
         "format_rewards": format_reward_score,
-        "length_rewards": 0,
+        # "length_rewards": 0,
         "thinking_rewards": thinking_rewards,
-        "unk_error_rewards": 0,
+        # "unk_error_rewards": 0,
         "repetition_rewards": language_repetition_score,
-        "language_monotony_rewards": 0,
+        # "language_monotony_rewards": 0,
         "correctness_rewards": acc_reward_score,
         "soft_exact_match": acc_reward_score,
         "hard_exact_match": acc_reward_score,

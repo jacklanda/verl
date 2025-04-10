@@ -41,20 +41,21 @@ def _default_compute_score(data_source, prompt, solution_str, ground_truth, extr
     elif data_source in ['hiyouga/geometry3k']:
         from . import geo3k
         res = geo3k.compute_score(solution_str, ground_truth)
-    elif data_source in ["LawGPT"]:
-        from . import law
-        res, eval_result = law.compute_score(prompt, solution_str, ground_truth)
-    elif data_source in ["StrategyQA"]:
-        from . import strategyqa
-        res, eval_result = strategyqa.compute_score(prompt, solution_str, ground_truth)
-    elif data_source in ["ProntoQA"]:
-        from . import prontoqa
-        res, eval_result = prontoqa.compute_score(prompt, solution_str, ground_truth)
-    elif data_source in ["ProofWriter"]:
-        from . import proofwriter
-        res, eval_result = proofwriter.compute_score(prompt, solution_str, ground_truth)
+    # elif data_source in ["LawGPT"]:
+        # from . import law
+        # res, eval_result = law.compute_score(prompt, solution_str, ground_truth)
+    # elif data_source in ["StrategyQA"]:
+        # from . import strategyqa
+        # res, eval_result = strategyqa.compute_score(prompt, solution_str, ground_truth, data_source=data_source)
+    # elif data_source in ["ProntoQA"]:
+        # from . import prontoqa
+        # res, eval_result = prontoqa.compute_score(prompt, solution_str, ground_truth, data_source=data_source)
+    # elif data_source in ["ProofWriter"]:
+        # from . import proofwriter
+        # res, eval_result = proofwriter.compute_score(prompt, solution_str, ground_truth, data_source=data_source)
     else:
-        raise NotImplementedError
+        from . import mix
+        res, eval_result = mix.compute_score(prompt, solution_str, ground_truth, data_source=data_source)
 
     if isinstance(res, (int, float, bool)):
         return float(res), eval_result

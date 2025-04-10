@@ -580,16 +580,45 @@ class RayPPOTrainer(object):
             data_source_reward[data_source].append(reward_tensor[i].item())
 
         # get the data_source as default in the first item in the batch
-        data_source = data_sources[0]
-        eval_dir = self.eval_dir.replace("eval-", f"{data_source}-eval-")
+        exp_name = self.config.trainer.experiment_name
+        eval_dir = self.eval_dir.replace("eval-", f"{exp_name}-eval-")
         os.makedirs(eval_dir, exist_ok=True)
         with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
             json.dump(eval_results, f, ensure_ascii=False, indent=4)
             self.eval_times += 1
 
+        data_source_soft_exact_match = {}
+        data_source_hard_exact_match = {}
+        for eval_result in eval_results:
+            data_source = eval_result["data_source"]
+            if data_source not in data_source_soft_exact_match:
+                data_source_soft_exact_match[data_source] = []
+            if data_source not in data_source_hard_exact_match:
+                data_source_hard_exact_match[data_source] = []
+            soft_exact_match_score = eval_result["soft_exact_match"]
+            hard_exact_match_score = eval_result["hard_exact_match"]
+            data_source_soft_exact_match[data_source].append(soft_exact_match_score)
+            data_source_hard_exact_match[data_source].append(hard_exact_match_score)
+
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
-            metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
+            metric_dict["val/soft_exact_match"] = round(
+                sum([item["soft_exact_match"] for item in eval_results])
+                / len(eval_results),
+                5,
+            )
+            metric_dict["val/hard_exact_match"] = round(
+                sum([item["hard_exact_match"] for item in eval_results])
+                / len(eval_results),
+                5,
+            )
+            metric_dict[f'val/soft_exact_match/{data_source}'] = np.mean(
+                data_source_soft_exact_match[data_source]
+            )
+            metric_dict[f'val/hard_exact_match/{data_source}'] = np.mean(
+                data_source_hard_exact_match[data_source]
+            )
+            metric_dict[f'val/rewards/{data_source}'] = np.mean(rewards)
             metric_dict["val/correctness_rewards"] = round(
                 sum([item["correctness_rewards"] for item in eval_results])
                 / len(eval_results),
@@ -620,21 +649,11 @@ class RayPPOTrainer(object):
                 / len(eval_results),
                 5,
             )
-            metric_dict["val/unk_error_rewards"] = round(
-                sum([item["unk_error_rewards"] for item in eval_results])
-                / len(eval_results),
-                5,
-            )
-            metric_dict["val/soft_exact_match"] = round(
-                sum([item["soft_exact_match"] for item in eval_results])
-                / len(eval_results),
-                5,
-            )
-            metric_dict["val/hard_exact_match"] = round(
-                sum([item["hard_exact_match"] for item in eval_results])
-                / len(eval_results),
-                5,
-            )
+            # metric_dict["val/unk_error_rewards"] = round(
+                # sum([item["unk_error_rewards"] for item in eval_results])
+                # / len(eval_results),
+                # 5,
+            # )
 
         return metric_dict
 
@@ -943,6 +962,24 @@ class RayPPOTrainer(object):
 
                         # we combine with rule-based rm
                         reward_tensor, batch_eval_results = self.reward_fn(batch)
+
+                        data_source_soft_exact_match = {}
+                        data_source_hard_exact_match = {}
+                        for eval_result in batch_eval_results:
+                            data_source = eval_result["data_source"]
+                            if data_source not in data_source_soft_exact_match:
+                                data_source_soft_exact_match[data_source] = []
+                            if data_source not in data_source_hard_exact_match:
+                                data_source_hard_exact_match[data_source] = []
+                            soft_exact_match_score = eval_result["soft_exact_match"]
+                            hard_exact_match_score = eval_result["hard_exact_match"]
+                            data_source_soft_exact_match[data_source].append(soft_exact_match_score)
+                            data_source_hard_exact_match[data_source].append(hard_exact_match_score)
+
+                        for data_source, scores in data_source_soft_exact_match.items():
+                            metrics[f"critic/soft_exact_match/{data_source}"] = np.mean(scores)
+                        for data_source, scores in data_source_hard_exact_match.items():
+                            metrics[f"critic/hard_exact_match/{data_source}"] = np.mean(scores)
 
                         batch.batch['token_level_scores'] = reward_tensor
                         for eval_result in batch_eval_results:

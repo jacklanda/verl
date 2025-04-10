@@ -204,10 +204,9 @@ def compute_score(
     }
 
     rewards = (
-        acc_reward_score
-        + format_reward_score
-        + thinking_reward_score
-        + language_repetition_score
+        acc_reward_score + format_reward_score
+        # + thinking_reward_score
+        # + language_repetition_score
     )
 
     return rewards, eval_result

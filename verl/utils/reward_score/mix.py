@@ -21,7 +21,6 @@ def parse_generation(
     if data_source == "Boxes":
         parsed_text = [t.strip() for t in unwrapped_text.split(",")]
     elif data_source == "Clutrr":
-        # remove the potential punctuation at the tail for the whole string
         parsed_text = unwrapped_text.rstrip(",.!?:;\"'()[]{}<>").strip()
 
     return parsed_text
@@ -90,18 +89,6 @@ def format_reward(predict_str: str) -> float:
         answer_end_token_idx = predict_str.index("</answer>")
     except ValueError:
         answer_end_token_idx = -1
-    """
-    if "<think>" in predict_str and "</think>" in predict_str:
-        return 0.0
-    elif "<think>" in predict_str or "</think>" in predict_str:
-        return -0.5
-    elif "<answer>" in predict_str and "</answer>" in predict_str:
-        return 0.0
-    elif "<answer>" in predict_str or "</answer>" in predict_str:
-        return -0.5
-    else:
-        return -1.0
-    """
     if (
         think_begin_token_idx < think_end_token_idx
         and answer_begin_token_idx < answer_end_token_idx
@@ -114,7 +101,7 @@ def format_reward(predict_str: str) -> float:
 
 def grade_language_repetition(
     given_answer: str,
-    language: str = "zh",
+    language: str = "en",
     ngram: int = 2,
     tau: float = 1.0,
     steepness: float = 4.0,

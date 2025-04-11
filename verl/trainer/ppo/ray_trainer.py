@@ -977,9 +977,9 @@ class RayPPOTrainer(object):
                             data_source_hard_exact_match[data_source].append(hard_exact_match_score)
 
                         for data_source, scores in data_source_soft_exact_match.items():
-                            metrics[f"critic/soft_exact_match/{data_source}"] = np.mean(scores)
+                            metrics[f"train/soft_exact_match/{data_source}"] = np.mean(scores)
                         for data_source, scores in data_source_hard_exact_match.items():
-                            metrics[f"critic/hard_exact_match/{data_source}"] = np.mean(scores)
+                            metrics[f"train/hard_exact_match/{data_source}"] = np.mean(scores)
 
                         batch.batch['token_level_scores'] = reward_tensor
                         for eval_result in batch_eval_results:

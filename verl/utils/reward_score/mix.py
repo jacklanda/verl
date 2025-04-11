@@ -3,7 +3,9 @@ import math
 from typing import Any, Tuple, Dict, List, Optional
 
 
-def parse_generation(prediction: str) -> str:
+def parse_generation(
+    prediction: str, data_source: Optional[str] = None
+) -> str | List[str]:
     """parse the generated texts to extract the final answer.
 
     Args:
@@ -12,7 +14,17 @@ def parse_generation(prediction: str) -> str:
     Returns:
         List[str]: parsed texts
     """
-    return prediction.rsplit("<answer>", 1)[-1].rsplit("</answer>", 1)[0].strip()
+    unwrapped_text = (
+        prediction.rsplit("<answer>", 1)[-1].rsplit("</answer>", 1)[0].lower().strip()
+    )
+
+    if data_source == "Boxes":
+        parsed_text = [t.strip() for t in unwrapped_text.split(",")]
+    elif data_source == "Clutrr":
+        # remove the potential punctuation at the tail for the whole string
+        parsed_text = unwrapped_text.rstrip(",.!?:;\"'()[]{}<>").strip()
+
+    return parsed_text
 
 
 def thinking_reward(
@@ -186,13 +198,23 @@ def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
     if data_source in ["ProntoQA", "ProofWriter"]:
         answer = parse_generation(predict_str)
         ground_truth = parse_generation(ground_truth)
-        return 1.0 if answer.lower() == ground_truth.lower() else 0.0
+        return 1.0 if answer == ground_truth else 0.0
     elif data_source == "Natural Reasoning":
         pass
     elif data_source == "Clutrr":
-        pass
+        answer = parse_generation(predict_str)
+        ground_truth = parse_generation(ground_truth)
+        return 1.0 if answer == ground_truth else 0.0
     elif data_source == "Boxes":
-        pass
+        answer = parse_generation(predict_str, data_source)
+        ground_truth = parse_generation(ground_truth, data_source)
+        if len(answer) == 0:
+            return 0.0
+        else:
+            # compute the precision and recall for two sets
+            precision = len(answer & ground_truth) / len(answer)
+            recall = len(answer & ground_truth) / len(ground_truth)
+            return 2 * precision * recall / (precision + recall)
 
 
 def compute_score(

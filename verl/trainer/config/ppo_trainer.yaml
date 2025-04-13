@@ -180,6 +180,10 @@ algorithm:
     kl_coef: 0.001
     horizon: 10000
     target_kl: 0.1
+  filter_groups:
+    enable: True
+    metric: seq_reward # score / seq_reward / seq_final_reward / ...
+    max_num_gen_batches: 8 # Non-positive values mean no upper limit
 
 trainer:
   balance_batch: True

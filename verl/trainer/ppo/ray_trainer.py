@@ -973,13 +973,8 @@ class RayPPOTrainer(object):
                         batch = new_batch
                     else:  # NOTE: When prompts after filtering is less than train batch size, we skip to the next generation batch
                         metric_name = self.config.algorithm.filter_groups.metric
-                        if metric_name == "seq_final_reward":
-                            # Turn to numpy for easier filtering
-                            new_batch.non_tensor_batch["seq_final_reward"] = new_batch.batch['token_level_scores'].sum(
-                                dim=-1).numpy()
-                        elif metric_name == "seq_reward":
-                            new_batch.non_tensor_batch["seq_reward"] = new_batch.batch['token_level_scores'].sum(
-                                dim=-1).numpy()
+                        new_batch.non_tensor_batch["seq_reward"] = new_batch.batch['token_level_scores'].sum(
+                            dim=-1).numpy()
 
                         # Collect the sequence reward for each trajectory
                         prompt_uid2metric_vals = defaultdict(list)

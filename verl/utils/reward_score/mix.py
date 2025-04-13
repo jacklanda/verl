@@ -19,9 +19,28 @@ def parse_generation(
     )
 
     if data_source == "Boxes":
-        parsed_text = [t.strip() for t in unwrapped_text.split(",")]
+        parsed_text = [
+            t.replace(" and ", ",")
+            .replace("the ", "")
+            .replace("and ", "")
+            .strip(",.!?:;\"'()[]{}<>")
+            .strip()
+            for t in unwrapped_text.split(",")
+        ]
     elif data_source == "Clutrr":
-        parsed_text = unwrapped_text.rstrip(",.!?:;\"'()[]{}<>").strip()
+        if len(unwrapped_text.split()) == 1:
+            # return the parsed entity if it is a single word
+            return unwrapped_text.replace("-in-law", "").strip()
+        pattern = r"is the (.*) of"
+        parsed_text = (
+            unwrapped_text.rstrip(",.!?:;\"'()[]{}<>").replace("-in-law", "").strip()
+        )
+        try:
+            parsed_text = re.findall(pattern, parsed_text)[-1].strip()
+        except AttributeError:
+            pass
+    else:
+        parsed_text = unwrapped_text
 
     return parsed_text
 
@@ -182,12 +201,10 @@ def grade_language_repetition(
 
 
 def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
-    if data_source in ["ProntoQA", "ProofWriter"]:
+    if data_source in ["ProntoQA", "ProofWriter", "Natural Reasoning"]:
         answer = parse_generation(predict_str)
         ground_truth = parse_generation(ground_truth)
         return 1.0 if answer == ground_truth else 0.0
-    elif data_source == "Natural Reasoning":
-        pass
     elif data_source == "Clutrr":
         answer = parse_generation(predict_str)
         ground_truth = parse_generation(ground_truth)
@@ -199,9 +216,17 @@ def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
             return 0.0
         else:
             # compute the precision and recall for two sets
-            precision = len(answer & ground_truth) / len(answer)
-            recall = len(answer & ground_truth) / len(ground_truth)
-            return 2 * precision * recall / (precision + recall)
+            precision = len(set(answer) & set(ground_truth)) / len(answer)
+            recall = len(set(answer) & set(ground_truth)) / len(ground_truth)
+            return (
+                2 * precision * recall / (precision + recall)
+                if precision + recall > 0
+                else 0.0
+            )
+    else:
+        answer = parse_generation(predict_str)
+        ground_truth = parse_generation(ground_truth)
+        return 1.0 if answer == ground_truth else 0.0
 
 
 def compute_score(
@@ -223,11 +248,11 @@ def compute_score(
         "reference_answer": parse_generation(ground_truth),
         # "meteor": meteor_score,
         "format_rewards": format_reward_score,
-        # "length_rewards": 0,
+        "length_rewards": 0,
         "thinking_rewards": thinking_rewards,
-        # "unk_error_rewards": 0,
+        "unk_error_rewards": 0,
         "repetition_rewards": language_repetition_score,
-        # "language_monotony_rewards": 0,
+        "language_monotony_rewards": 0,
         "correctness_rewards": acc_reward_score,
         "soft_exact_match": acc_reward_score,
         "hard_exact_match": acc_reward_score,

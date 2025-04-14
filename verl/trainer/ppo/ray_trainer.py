@@ -889,13 +889,13 @@ class RayPPOTrainer(object):
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_gen_batches += 1
                 # pop those keys for generation
-                if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
-                    gen_batch = batch.pop(
+                if 'multi_modal_inputs' in new_batch.non_tensor_batch.keys():
+                    gen_batch = new_batch.pop(
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
                         non_tensor_batch_keys=['raw_prompt_ids', 'multi_modal_data', 'multi_modal_inputs'],
                     )
                 else:
-                    gen_batch = batch.pop(
+                    gen_batch = new_batch.pop(
                         batch_keys=['input_ids', 'attention_mask', 'position_ids'],
                         non_tensor_batch_keys=['raw_prompt_ids'],
                     )
@@ -913,23 +913,21 @@ class RayPPOTrainer(object):
                             gen_baseline_batch.meta_info['do_sample'] = False
                             gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
 
-                            batch = batch.union(gen_baseline_output)
-                            reward_baseline_tensor, _ = self.reward_fn(batch)
+                            new_batch = new_batch.union(gen_baseline_output)
+                            reward_baseline_tensor, _ = self.reward_fn(new_batch)
                             reward_baseline_tensor = reward_baseline_tensor.sum(dim=-1)
 
-                            batch.pop(batch_keys=list(gen_baseline_output.batch.keys()))
+                            new_batch.pop(batch_keys=list(gen_baseline_output.batch.keys()))
 
-                            batch.batch['reward_baselines'] = reward_baseline_tensor
+                            new_batch.batch['reward_baselines'] = reward_baseline_tensor
 
                             del gen_baseline_batch, gen_baseline_output
 
-                    batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))],
-                                                             dtype=object)
+                    new_batch.non_tensor_batch['uid'] = np.array(
+                        [str(uuid.uuid4()) for _ in range(len(new_batch.batch))], dtype=object)
                     # repeat to align with repeated responses in rollout
-                    batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
-                    batch = batch.union(gen_batch_output)
-
-                    batch.batch['response_mask'] = compute_response_mask(batch)
+                    new_batch = new_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                    new_batch = new_batch.union(gen_batch_output)
 
                     with _timer('reward', timing_raw):
                         # compute scores. Support both model and function-based.
@@ -943,12 +941,12 @@ class RayPPOTrainer(object):
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         try:
-                            reward_result = self.reward_fn(new_batch, return_dict=True)
+                            reward_result, _ = self.reward_fn(new_batch, return_dict=True)
                             reward_tensor = reward_result['reward_tensor']
                             reward_extra_infos_dict = reward_result['reward_extra_info']
                         except Exception as e:
                             print(f'Error in reward_fn: {e}')
-                            reward_tensor = self.reward_fn(new_batch)
+                            reward_tensor, _ = self.reward_fn(new_batch)
                             reward_extra_infos_dict = {}
 
                         new_batch.batch['token_level_scores'] = reward_tensor
@@ -1018,6 +1016,8 @@ class RayPPOTrainer(object):
                             # Align the batch
                             traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
                             batch = batch[:traj_bsz]
+
+                    batch.batch['response_mask'] = compute_response_mask(batch)
 
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
@@ -1136,6 +1136,12 @@ class RayPPOTrainer(object):
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
                 metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+                timing_raw = defaultdict(float)  # clear timing
+
+                metrics["train/num_gen_batches"] = num_gen_batches
+                batch = None
+                num_prompt_in_batch = 0
+                num_gen_batches = 0
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)

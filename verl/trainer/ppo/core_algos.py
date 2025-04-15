@@ -329,7 +329,7 @@ def compute_policy_loss(old_log_prob, log_prob, advantages, response_mask, clipr
     cliprange_high = cliprange + 0.08
     pg_losses2 = -advantages * torch.clamp(ratio, 1.0 - cliprange_low, 1.0 + cliprange_high)
 
-    clip_pg_losses1 = torch.maximun(pg_losses1, pg_losses2)
+    clip_pg_losses1 = torch.maximum(pg_losses1, pg_losses2)
     pg_clipfrac = verl_F.masked_mean(torch.gt(pg_losses2, pg_losses1).float(), response_mask)
 
     pg_losses3 = -advantages * clip_ratio_c

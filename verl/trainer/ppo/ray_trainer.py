@@ -884,7 +884,6 @@ class RayPPOTrainer(object):
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
                 metrics = {}
-                timing_raw = {}
 
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_gen_batches += 1
@@ -941,17 +940,15 @@ class RayPPOTrainer(object):
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         try:
-                            reward_result, _ = self.reward_fn(new_batch, return_dict=True)
+                            reward_result, _ = self.reward_fn(new_batch)
                             reward_tensor = reward_result['reward_tensor']
                             reward_extra_infos_dict = reward_result['reward_extra_info']
-                        except Exception as e:
-                            print(f'Error in reward_fn: {e}')
+                        except Exception as _:
                             reward_tensor, _ = self.reward_fn(new_batch)
                             reward_extra_infos_dict = {}
 
                         new_batch.batch['token_level_scores'] = reward_tensor
 
-                        print(f'{list(reward_extra_infos_dict.keys())=}')
                         if reward_extra_infos_dict:
                             new_batch.non_tensor_batch.update({
                                 k: np.array(v) for k, v in reward_extra_infos_dict.items()
@@ -972,7 +969,7 @@ class RayPPOTrainer(object):
                     else:  # NOTE: When prompts after filtering is less than train batch size, we skip to the next generation batch
                         metric_name = self.config.algorithm.filter_groups.metric
                         new_batch.non_tensor_batch["seq_reward"] = new_batch.batch['token_level_scores'].sum(
-                            dim=-1).numpy()
+                            dim=-1).numpy().astype(object)
 
                         # Collect the sequence reward for each trajectory
                         prompt_uid2metric_vals = defaultdict(list)
@@ -1015,6 +1012,8 @@ class RayPPOTrainer(object):
                         else:
                             # Align the batch
                             traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
+                            print("Trajectory batch size:", traj_bsz)
+                            print("Batch size after filtering:", len(batch))
                             batch = batch[:traj_bsz]
 
                     batch.batch['response_mask'] = compute_response_mask(batch)

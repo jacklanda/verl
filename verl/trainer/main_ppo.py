@@ -68,7 +68,7 @@ def run_ppo(config) -> None:
                     'VLLM_LOGGING_LEVEL': 'WARN'
                 }
             },
-            _temp_dir="tmp/ray",
+            _temp_dir="/share/nlp/liuyang/tmp",
         )
 
     runner = TaskRunner.remote()

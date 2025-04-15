@@ -258,10 +258,6 @@ def compute_score(
         "hard_exact_match": acc_reward_score,
     }
 
-    rewards = (
-        acc_reward_score + format_reward_score
-        # + thinking_rewards
-        # + language_repetition_score
-    )
+    rewards = acc_reward_score + format_reward_score
 
     return rewards, eval_result

@@ -254,6 +254,7 @@ class RayPPOTrainer(object):
         self.config = config
         self.reward_fn = reward_fn
         self.val_reward_fn = val_reward_fn
+        self.logger = None
         self.eval_times = 0
         self.eval_dir = f"outputs/eval-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
 
@@ -582,9 +583,16 @@ class RayPPOTrainer(object):
 
         # get the data_source as default in the first item in the batch
         exp_name = self.config.trainer.experiment_name
-        eval_dir = self.eval_dir.replace("eval-", f"{exp_name}-eval-")
+        run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
+        eval_dir = self.eval_dir.replace("eval-", f"{exp_name}-eval-{run_id}-")
         os.makedirs(eval_dir, exist_ok=True)
         with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
+            # add run_id for each eval_result in eval_results
+            for i in range(len(eval_results)):
+                run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
+                eval_results[i]['run_id'] = run_id
+                eval_results[i]['exp_name'] = exp_name
+
             json.dump(eval_results, f, ensure_ascii=False, indent=4)
             self.eval_times += 1
 
@@ -855,6 +863,8 @@ class RayPPOTrainer(object):
                           default_backend=self.config.trainer.logger,
                           config=OmegaConf.to_container(self.config, resolve=True),
                           run_id=self.config.trainer.run_id)
+
+        self.logger = logger
 
         self.global_steps = 0
 

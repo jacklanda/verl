@@ -106,6 +106,16 @@ class Tracking(object):
             if backend is None or default_backend in backend:
                 logger_instance.log(data=data, step=step)
 
+    def get_run_id(self) -> str:
+        if 'wandb' in self.logger:
+            return self.logger['wandb'].run.id
+        elif 'swanlab' in self.logger:
+            return self.logger['swanlab'].get_run_id()
+        elif 'vemlp_wandb' in self.logger:
+            return self.logger['vemlp_wandb'].run.id
+        else:
+            raise ValueError("No run id available for this logger")
+
     def __del__(self):
         if 'wandb' in self.logger:
             self.logger['wandb'].finish(exit_code=0)

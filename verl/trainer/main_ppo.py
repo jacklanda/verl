@@ -60,6 +60,9 @@ def run_ppo(config) -> None:
     os.environ["ENSURE_CUDA_VISIBLE_DEVICES"] = os.environ.get('CUDA_VISIBLE_DEVICES', '')
     if not ray.is_initialized():
         # this is for local ray cluster
+        tmp_dir = "/share/nlp/liuyang/tmp"
+        if not os.path.isdir(tmp_dir):
+            tmp_dir = "/data/liuyang/tmp"
         ray.init(
             runtime_env={
                 'env_vars': {
@@ -68,7 +71,7 @@ def run_ppo(config) -> None:
                     'VLLM_LOGGING_LEVEL': 'WARN'
                 }
             },
-            _temp_dir="/share/nlp/liuyang/tmp",
+            _temp_dir=tmp_dir,
         )
 
     runner = TaskRunner.remote()

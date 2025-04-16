@@ -33,7 +33,7 @@ import ray
 import numpy as np
 from codetiming import Timer
 from omegaconf import OmegaConf, open_dict
-from verl import DataProto
+from verl import DataProto, DataProtoItem, collate_fn as dataproto_collate_fn
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 from verl.single_controller.base import Worker
 from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
@@ -1003,7 +1003,7 @@ class RayPPOTrainer(object):
                             print(f'{num_prompt_in_batch=} < {prompt_bsz=}')
                             max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
                             if max_num_gen_batches <= 0 or num_gen_batches < max_num_gen_batches:
-                                print(f'{num_gen_batches=}. Keep generating...')
+                                print(f'{num_gen_batches=}. Keep generating ...')
                                 continue
                             else:
                                 raise ValueError(
@@ -1012,8 +1012,14 @@ class RayPPOTrainer(object):
                         else:
                             # Align the batch
                             traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
-                            print("Trajectory batch size:", traj_bsz)
-                            print("Batch size after filtering:", len(batch))
+                            # print("Trajectory batch size:", traj_bsz)
+                            # print("Batch size after filtering:", len(batch))
+                            if isinstance(batch, DataProtoItem):
+                                try:
+                                    batch = dataproto_collate_fn([batch] * 8)
+                                except Exception as _:
+                                    print('Detected batch is a \"DataProtoItem\" item. Keep generating ...')
+                                    continue
                             batch = batch[:traj_bsz]
 
                     batch.batch['response_mask'] = compute_response_mask(batch)

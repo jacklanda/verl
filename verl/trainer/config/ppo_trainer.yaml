@@ -184,6 +184,16 @@ algorithm:
     enable: True
     metric: seq_reward # score / seq_reward / seq_final_reward / ...
     max_num_gen_batches: 8 # Non-positive values mean no upper limit
+  domain_sampling:
+    enable: True
+    metric: seq_reward
+    num_domain: 8  # \mathcal{D} = \{d_1, d_2, \cdots, d_n\}
+    init_weight_method: average  # weight sampling method for each domain
+    weight_level: episode  # conduct re-weight & sample at each [step/episode/epoch] 
+    reward_buffer_size: 8  # buffer (queue) size for reward tracking
+    epsilon: 1e-1  # 1e-2 for domains <= 10, 1e-3 for > 10 domains
+    activation_threshold: 0.7
+    early_quit_threshold: 0.9
 
 trainer:
   balance_batch: True

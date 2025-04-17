@@ -137,6 +137,7 @@ def grade_language_repetition(
                     - tau = 0: No diversity reward (always returns 0)
                     - tau = 1: Full diversity reward (returns value in [-1, 0])
                     - 0 < tau < 1: Scaled diversity reward
+        steepness (float): Steepness of the sigmoid-like function for reward scaling, default 4.0
 
     Returns:
         float: A scaled reward value between -1 and 0, where values closer to 0 indicate higher diversity
@@ -185,7 +186,6 @@ def grade_language_repetition(
     # and approaches 0 (max reward) as distinct_n approaches 1
 
     # Parameters to tune the smoothing function
-    steepness = steepness  # Controls how steep the reward curve is
     midpoint = 0.5  # The distinct-n value that gives a reward of -0.5
 
     # Sigmoid-like function mapped to [-1, 0]
@@ -197,7 +197,9 @@ def grade_language_repetition(
     # Ensure the reward stays within [-1, 0]
     scaled_reward = max(-1, min(0, scaled_reward))
 
-    return scaled_reward
+    repetition_rewards = 0.0 if scaled_reward > -0.5 else scaled_reward
+
+    return repetition_rewards
 
 
 def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
@@ -258,6 +260,6 @@ def compute_score(
         "hard_exact_match": acc_reward_score,
     }
 
-    rewards = acc_reward_score + format_reward_score
+    rewards = acc_reward_score + format_reward_score + language_repetition_score
 
     return rewards, eval_result

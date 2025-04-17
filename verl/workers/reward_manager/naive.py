@@ -100,8 +100,6 @@ class NaiveRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            run_name = extra_info.get('run_name', None) if extra_info else None
-
             score, eval_result = self.compute_score(
                 data_source=data_source,
                 prompt=prompt_str,
@@ -110,7 +108,6 @@ class NaiveRewardManager:
                 extra_info=extra_info,
             )
             reward_tensor[i, valid_response_length - 1] = score
-            eval_result['run_name'] = run_name
 
             eval_results.append(eval_result)
 

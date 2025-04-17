@@ -256,7 +256,7 @@ class RayPPOTrainer(object):
         self.val_reward_fn = val_reward_fn
         self.logger = None
         self.eval_times = 0
-        self.eval_dir = f"outputs/eval-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+        self.eval_dir = f"outputs/{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
 
         self.hybrid_engine = config.actor_rollout_ref.hybrid_engine
         assert self.hybrid_engine, 'Currently, only support hybrid engine'
@@ -584,7 +584,7 @@ class RayPPOTrainer(object):
         # get the data_source as default in the first item in the batch
         exp_name = self.config.trainer.experiment_name
         run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
-        eval_dir = self.eval_dir.replace("eval-", f"{exp_name}-eval-{run_id}-")
+        eval_dir = self.eval_dir.replace("outputs/", f"outputs/{exp_name}-{run_id}-")
         os.makedirs(eval_dir, exist_ok=True)
         with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
             # add run_id for each eval_result in eval_results
@@ -593,7 +593,14 @@ class RayPPOTrainer(object):
                 eval_results[i]['run_id'] = run_id
                 eval_results[i]['exp_name'] = exp_name
 
-            json.dump(eval_results, f, ensure_ascii=False, indent=4)
+            eval_results_by_data_source = dict()
+            for eval_result in eval_results:
+                data_source = eval_result['data_source']
+                if data_source not in eval_results_by_data_source:
+                    eval_results_by_data_source[data_source] = []
+                eval_results_by_data_source[data_source].append(eval_result)
+
+            json.dump(eval_results_by_data_source, f, ensure_ascii=False, indent=4)
             self.eval_times += 1
 
         data_source_soft_exact_match = {}

@@ -636,6 +636,7 @@ class RayPPOTrainer(object):
             for i in range(len(eval_results)):
                 eval_results[i]['run_id'] = run_id
                 eval_results[i]['exp_name'] = exp_name
+                eval_results[i]['global_step'] = self.global_steps
 
             eval_results_by_data_source = dict()
             for eval_result in eval_results:

@@ -25,7 +25,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pprint import pprint
-from typing import Type, Dict
+from typing import Type, Dict, List
 from copy import deepcopy
 from tqdm import tqdm
 
@@ -42,7 +42,7 @@ from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.metric_utils import compute_data_metrics, compute_throughout_metrics, compute_timing_metrics, reduce_metrics
 from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path
-from verl.utils.dataset.rl_dataset import RLHFDataset, collate_fn
+from verl.utils.dataset.rl_dataset import DomainWeightedRLHFDataset, DomainSampler, RLHFDataset, collate_fn
 from verl.utils.tracking import ValidationGenerationsLogger
 from torch.utils.data import RandomSampler, SequentialSampler
 from torchdata.stateful_dataloader import StatefulDataLoader
@@ -399,34 +399,71 @@ class RayPPOTrainer(object):
         print("[validate_config] All configuration checks passed successfully!")
 
     def _create_dataloader(self):
-        # TODO: we have to make sure the batch size is divisible by the dp size
-        self.train_dataset = RLHFDataset(parquet_files=self.config.data.train_files,
-                                         tokenizer=self.tokenizer,
-                                         processor=self.processor,
-                                         prompt_key=self.config.data.prompt_key,
-                                         image_key=self.config.data.get('image_key', 'images'),
-                                         max_prompt_length=self.config.data.max_prompt_length,
-                                         filter_prompts=True,
-                                         return_raw_chat=self.config.data.get('return_raw_chat', False),
-                                         truncation=self.config.data.get('truncation', 'error'),
-                                         filter_overlong_prompts=self.config.data.filter_overlong_prompts)
-        assert self.train_dataset.truncation == self.config.data.get(
-            'truncation', 'error'
-        ), f'dataset truncation {self.train_dataset.truncation} must be the same as config {self.config.data.get("truncation", "error")}'
-        # use sampler for better ckpt resume
-        if self.config.data.shuffle:
-            train_dataloader_generator = torch.Generator()
-            train_dataloader_generator.manual_seed(self.config.data.get('seed', 1))
-            sampler = RandomSampler(data_source=self.train_dataset, generator=train_dataloader_generator)
-        else:
-            sampler = SequentialSampler(data_source=self.train_dataset)
+        if self.config.algorithm.domain_sampling.enable:
+            domain_sampling_config = self.config.algorithm.domain_sampling
+            domains = domain_sampling_config.domains
+            if domain_sampling_config.init_weight_method == "average":
+                domain_weights = {
+                    domain: 1.0 / len(domains) for domain in domains
+                }
+            # create the domain dataset
+            self.train_dataset = DomainWeightedRLHFDataset(
+                domain_parquet_files=self.config.data.train_files,
+                domain_weights=domain_weights,
+                tokenizer=self.tokenizer,
+                processor=self.processor,
+                prompt_key=self.config.data.prompt_key,
+                image_key=self.config.data.get('image_key', 'images'),
+                max_prompt_length=self.config.data.max_prompt_length,
+                filter_prompts=True,
+                return_raw_chat=self.config.data.get('return_raw_chat', False),
+                truncation=self.config.data.get('truncation', 'error'),
+                filter_overlong_prompts=self.config.data.filter_overlong_prompts,
+            )
 
-        self.train_dataloader = StatefulDataLoader(dataset=self.train_dataset,
-                                                   batch_size=self.config.data.train_batch_size,
-                                                   num_workers=8,
-                                                   drop_last=True,
-                                                   collate_fn=collate_fn,
-                                                   sampler=sampler)
+            # Create the sampler
+            sampler = DomainSampler(self.train_dataset, self.config.data.train_batch_size)
+            self.sampler = sampler
+
+            # Create the dataloader
+            self.train_dataloader = StatefulDataLoader(
+                dataset=self.train_dataset,
+                batch_sampler=sampler,
+                num_workers=8,
+                drop_last=True,
+                collate_fn=collate_fn,
+            )
+            print("[Train DataLoader] Employing domain sampling for training dataloader.")
+        else:
+            # TODO: we have to make sure the batch size is divisible by the dp size
+            self.train_dataset = RLHFDataset(parquet_files=self.config.data.train_files,
+                                            tokenizer=self.tokenizer,
+                                            processor=self.processor,
+                                            prompt_key=self.config.data.prompt_key,
+                                            image_key=self.config.data.get('image_key', 'images'),
+                                            max_prompt_length=self.config.data.max_prompt_length,
+                                            filter_prompts=True,
+                                            return_raw_chat=self.config.data.get('return_raw_chat', False),
+                                            truncation=self.config.data.get('truncation', 'error'),
+                                            filter_overlong_prompts=self.config.data.filter_overlong_prompts)
+            assert self.train_dataset.truncation == self.config.data.get(
+                'truncation', 'error'
+            ), f'dataset truncation {self.train_dataset.truncation} must be the same as config {self.config.data.get("truncation", "error")}'
+            # use sampler for better ckpt resume
+            if self.config.data.shuffle:
+                train_dataloader_generator = torch.Generator()
+                train_dataloader_generator.manual_seed(self.config.data.get('seed', 1))
+                sampler = RandomSampler(data_source=self.train_dataset, generator=train_dataloader_generator)
+            else:
+                sampler = SequentialSampler(data_source=self.train_dataset)
+
+            self.train_dataloader = StatefulDataLoader(dataset=self.train_dataset,
+                                                    batch_size=self.config.data.train_batch_size,
+                                                    num_workers=8,
+                                                    drop_last=True,
+                                                    collate_fn=collate_fn,
+                                                    sampler=sampler)
+            print("[Train DataLoader] Using default dataloader.")
 
         self.val_dataset = RLHFDataset(parquet_files=self.config.data.val_files,
                                        tokenizer=self.tokenizer,
@@ -856,6 +893,9 @@ class RayPPOTrainer(object):
                                                     prefix=logging_prefix)
         metrics.update(global_balance_stats)
 
+    def compute_weights(self) -> Dict[str, float]:
+        pass
+
     def fit(self):
         """
         The training loop of PPO.
@@ -957,11 +997,11 @@ class RayPPOTrainer(object):
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         try:
-                            reward_result, _ = self.reward_fn(new_batch)
+                            reward_result, batch_train_results = self.reward_fn(new_batch)
                             reward_tensor = reward_result['reward_tensor']
                             reward_extra_infos_dict = reward_result['reward_extra_info']
                         except Exception as _:
-                            reward_tensor, _ = self.reward_fn(new_batch)
+                            reward_tensor, batch_train_results = self.reward_fn(new_batch)
                             reward_extra_infos_dict = {}
 
                         new_batch.batch['token_level_scores'] = reward_tensor
@@ -1049,6 +1089,11 @@ class RayPPOTrainer(object):
 
                     # compute global_valid tokens
                     batch.meta_info['global_token_num'] = torch.sum(batch.batch['attention_mask'], dim=-1).tolist()
+
+                    with _timer('domain_weights', timing_raw):
+                        # compute domain weights
+                        if self.config.algorithm.domain_sampling.enable:
+                            domain_weights = self.compute_weights(batch_train_results)
 
                     # recompute old_log_probs
                     with _timer('old_log_prob', timing_raw):
@@ -1167,6 +1212,12 @@ class RayPPOTrainer(object):
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)
+
+                if self.config.algorithm.domain_sampling.enable:
+                    # calculate domain sampling weights
+                    # TODO: implement domain sampling weights
+                    # update domain sampler
+                    self.train_dataloader.sampler.update_weights(weights=None)
 
                 if is_last_step:
                     pprint(f'Final validation metrics: {last_val_metrics}')

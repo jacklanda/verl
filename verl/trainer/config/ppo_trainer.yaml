@@ -188,10 +188,13 @@ algorithm:
     enable: True
     metric: seq_reward
     num_domain: 8  # \mathcal{D} = \{d_1, d_2, \cdots, d_n\}
+    domains: ["prontoqa", "proofwriter", "clutrr", "folio", "boxes", "logic_nli", "logical_deduction", "ar_lsat"]
     init_weight_method: average  # weight sampling method for each domain
     weight_level: episode  # conduct re-weight & sample at each [step/episode/epoch] 
     reward_buffer_size: 8  # buffer (queue) size for reward tracking
     epsilon: 1e-1  # 1e-2 for domains <= 10, 1e-3 for > 10 domains
+    tau: 0.8  # control the magnitude of weight 
+    target_value: 0.9  # i.e. r_{target}, control the potential optimization of reward
     activation_threshold: 0.7
     early_quit_threshold: 0.9
 

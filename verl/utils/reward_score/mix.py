@@ -37,7 +37,7 @@ def parse_generation(
         )
         try:
             parsed_text = re.findall(pattern, parsed_text)[-1].strip()
-        except AttributeError:
+        except Exception as _:
             pass
     else:
         parsed_text = unwrapped_text

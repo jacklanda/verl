@@ -197,23 +197,23 @@ def grade_language_repetition(
     # Ensure the reward stays within [-1, 0]
     scaled_reward = max(-1, min(0, scaled_reward))
 
-    repetition_rewards = 0.0 if scaled_reward > -0.5 else scaled_reward
+    repetition_rewards = 0.0 if scaled_reward > -0.8 else scaled_reward
 
     return repetition_rewards
 
 
 def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
     if data_source in ["ProntoQA", "ProofWriter", "Natural Reasoning"]:
-        answer = parse_generation(predict_str)
-        ground_truth = parse_generation(ground_truth)
+        answer = parse_generation(predict_str, data_source=data_source)
+        ground_truth = parse_generation(ground_truth, data_source=data_source)
         return 1.0 if answer == ground_truth else 0.0
     elif data_source == "Clutrr":
-        answer = parse_generation(predict_str)
-        ground_truth = parse_generation(ground_truth)
+        answer = parse_generation(predict_str, data_source=data_source)
+        ground_truth = parse_generation(ground_truth, data_source=data_source)
         return 1.0 if answer == ground_truth else 0.0
     elif data_source == "Boxes":
-        answer = parse_generation(predict_str, data_source)
-        ground_truth = parse_generation(ground_truth, data_source)
+        answer = parse_generation(predict_str, data_source=data_source)
+        ground_truth = parse_generation(ground_truth, data_source=data_source)
         if len(answer) == 0:
             return 0.0
         else:
@@ -226,8 +226,8 @@ def acc_reward(predict_str: str, ground_truth: str, data_source: str) -> float:
                 else 0.0
             )
     else:
-        answer = parse_generation(predict_str)
-        ground_truth = parse_generation(ground_truth)
+        answer = parse_generation(predict_str, data_source=data_source)
+        ground_truth = parse_generation(ground_truth, data_source=data_source)
         return 1.0 if answer == ground_truth else 0.0
 
 

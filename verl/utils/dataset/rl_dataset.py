@@ -276,6 +276,8 @@ class DomainWeightedRLHFDataset(Dataset):
         self.domains = list(domain_weights.keys())
 
         # Validate domains
+        print(f"Domains: {self.domains}")
+        print(f"Domain parquet files: {domain_parquet_files}")
         for domain in self.domains:
             if domain not in domain_parquet_files:
                 raise ValueError(
@@ -537,6 +539,10 @@ class DomainSampler:
         for domain in self.domains:
             self._refill_domain_indices(domain)
 
+    def domain_weights(self) -> Dict[str, float]:
+        """Return the current domain weights."""
+        return self.domain_weights
+
     def update_weights(self, weights: Optional[Dict[str, float]]=None):
         """Update the domain weights."""
         if weights is None:
@@ -565,6 +571,10 @@ class DomainSampler:
         indices = self.domain_indices[domain].copy()
         random.shuffle(indices)
         self.domain_iterators[domain] = indices
+
+    def __len__(self):
+        """Return the total number of batches."""
+        return len(self.dataset) // self.batch_size
 
     def __iter__(self):
         """Yield batches of indices that respect domain weights."""

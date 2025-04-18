@@ -25,7 +25,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pprint import pprint
-from typing import Type, Dict, List
+from typing import Any, Type, Dict, List
 from copy import deepcopy
 from tqdm import tqdm
 
@@ -407,8 +407,14 @@ class RayPPOTrainer(object):
                     domain: 1.0 / len(domains) for domain in domains
                 }
             # create the domain dataset
+            domain_parquet_files = defaultdict(list)
+            for domain in domains:
+                for file in self.config.data.train_files:
+                    if domain in file:
+                        domain_parquet_files[domain].append(file)
+            print(f"[Train DataLoader] Domain sampling enabled. Domain parquet files: {domain_parquet_files}")
             self.train_dataset = DomainWeightedRLHFDataset(
-                domain_parquet_files=self.config.data.train_files,
+                domain_parquet_files=domain_parquet_files,
                 domain_weights=domain_weights,
                 tokenizer=self.tokenizer,
                 processor=self.processor,
@@ -430,7 +436,6 @@ class RayPPOTrainer(object):
                 dataset=self.train_dataset,
                 batch_sampler=sampler,
                 num_workers=8,
-                drop_last=True,
                 collate_fn=collate_fn,
             )
             print("[Train DataLoader] Employing domain sampling for training dataloader.")
@@ -620,13 +625,15 @@ class RayPPOTrainer(object):
 
         # get the data_source as default in the first item in the batch
         exp_name = self.config.trainer.experiment_name
-        run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
+        try:
+            run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
+        except Exception as _:
+            run_id = None
         eval_dir = self.eval_dir.replace("outputs/", f"outputs/{exp_name}-{run_id}-")
         os.makedirs(eval_dir, exist_ok=True)
         with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
             # add run_id for each eval_result in eval_results
             for i in range(len(eval_results)):
-                run_id = self.config.trainer.run_id if self.config.trainer.run_id else self.logger.get_run_id()
                 eval_results[i]['run_id'] = run_id
                 eval_results[i]['exp_name'] = exp_name
 
@@ -893,8 +900,28 @@ class RayPPOTrainer(object):
                                                     prefix=logging_prefix)
         metrics.update(global_balance_stats)
 
-    def compute_weights(self) -> Dict[str, float]:
+    def compute_weights(self, batch_eval_info: List[Dict[str, Any]]) -> Dict[str, float]:
         pass
+
+    def display_batch_constituents(self, batch: Dict[str, Any]):
+        """
+        Display the batch constituents
+        """
+        # Count domain distribution in batch
+        domain_counts = {domain: 0 for domain in self.config.algorithm.domain_sampling.domains}
+        for item_domain in batch["domain"]:
+            domain_counts[item_domain] += 1
+
+        # Calculate domain weights in the batch
+        domain_weights_in_batch = {
+            domain: count / len(batch["domain"])
+            for domain, count in domain_counts.items()
+        }
+
+        print(f"Batch size: {len(batch['domain'])}")
+        print(f"Domain counts: {domain_counts}")
+        print(f"Domain weights in batch: {domain_weights_in_batch}")
+        print(f"Target domain weights: {self.sampler.domain_weights}")
 
     def fit(self):
         """
@@ -942,6 +969,7 @@ class RayPPOTrainer(object):
             for batch_dict in self.train_dataloader:
                 metrics = {}
 
+                self.display_batch_constituents(batch_dict)
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_gen_batches += 1
                 # pop those keys for generation
@@ -1217,7 +1245,7 @@ class RayPPOTrainer(object):
                     # calculate domain sampling weights
                     # TODO: implement domain sampling weights
                     # update domain sampler
-                    self.train_dataloader.sampler.update_weights(weights=None)
+                    self.sampler.update_weights(weights=domain_weights)
 
                 if is_last_step:
                     pprint(f'Final validation metrics: {last_val_metrics}')

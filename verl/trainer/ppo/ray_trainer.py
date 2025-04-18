@@ -970,7 +970,8 @@ class RayPPOTrainer(object):
             for batch_dict in self.train_dataloader:
                 metrics = {}
 
-                self.display_batch_constituents(batch_dict)
+                if self.config.algorithm.domain_sampling.enable:
+                    self.display_batch_constituents(batch_dict)
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_gen_batches += 1
                 # pop those keys for generation

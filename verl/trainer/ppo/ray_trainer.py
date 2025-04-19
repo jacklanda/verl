@@ -901,8 +901,56 @@ class RayPPOTrainer(object):
                                                     prefix=logging_prefix)
         metrics.update(global_balance_stats)
 
-    def compute_weights(self, batch_eval_info: List[Dict[str, Any]]) -> Dict[str, float]:
-        pass
+    def compute_weights(self, batch_reward: List[Dict[str, str | float]]) -> Dict[str, float]:
+        """
+        Compute the weights for each sample in the batch based on the reward values.
+        """
+        eps = self.config.algorithm.domain_sampling.epsilon
+        target_value = self.config.algorithm.domain_sampling.target_value
+        tau = self.config.algorithm.domain_sampling.tau
+        normalize = self.config.algorithm.domain_sampling.normalize
+
+        # Step 1. retrieve the rewards for each domain
+        rewards_by_domain = dict()
+        for item in batch_reward:
+            domain = item['data_source']
+            rewards = item['rewards']
+            if domain not in rewards_by_domain:
+                rewards_by_domain[domain] = []
+            rewards_by_domain[domain].append(rewards)
+
+        # Step 2. calculate sum of rewards from the batch by domain
+        rewards_sum = dict()
+        for item in batch_reward:
+            domain = item['data_source']
+            rewards = item['rewards']
+            if domain not in rewards_sum:
+                rewards_sum[domain] = 0.0
+            rewards_sum[domain] += rewards
+
+        # Step 3. calculate the algebra mean of the rewards ($\hat{r}_i$) for each domain
+        rewards_mean = dict()
+        for domain, rewards in rewards_sum.items():
+            rewards_mean[domain] = rewards / len(rewards_by_domain[domain])
+
+        # Step 4. calculate the value (i.e., underfit degree) of each domain ($v_i$):
+        # $v_i = max(0, r_{target} - \hat{r}_i)$
+        value_by_domain = dict()
+        for domain, rewards in rewards_mean.items():
+            value_by_domain[domain] = max(0, target_value - rewards)
+
+        # Step 5. calculate the unnormalized weight of each domain ($w_i$): $w_i = exp((v_i + eps) / \tau)$
+        unnorm_weights_by_domain = dict()
+        for domain, value in value_by_domain.items():
+            unnorm_weights_by_domain[domain] = math.exp((value + eps) / tau)
+
+        # Step 6. calculate the normalized weight of each domain ($w_i$): $w_i = w_i / \sum_{j=1}^k w_j$
+        norm_weights_by_domain = dict()
+        for domain, unnorm_weight in unnorm_weights_by_domain.items():
+            norm_weights_by_domain[domain] = unnorm_weight / sum(unnorm_weights_by_domain.values())
+
+        return norm_weights_by_domain
+
 
     def display_batch_constituents(self, batch: Dict[str, Any]):
         """
@@ -1123,7 +1171,16 @@ class RayPPOTrainer(object):
                     with _timer('domain_weights', timing_raw):
                         # compute domain weights
                         if self.config.algorithm.domain_sampling.enable:
-                            domain_weights = self.compute_weights(batch_train_results)
+                            # calculate domain sampling weights
+                            # TODO: implement domain sampling weights
+                            batch_rewards = []
+                            for item in batch_train_results:
+                                reward_items = {
+                                    "data_source": item["data_source"],
+                                    "rewards": item["correctness_rewards"],
+                                }
+                                batch_rewards.append(reward_items)
+                            latest_domain_weights: Dict[str, float] = self.compute_weights(batch_rewards)
 
                     # recompute old_log_probs
                     with _timer('old_log_prob', timing_raw):
@@ -1152,18 +1209,18 @@ class RayPPOTrainer(object):
                             batch = batch.union(reward_tensor)
 
                         # we combine with rule-based rm
-                        reward_tensor, batch_eval_results = self.reward_fn(batch)
+                        reward_tensor, batch_train_results = self.reward_fn(batch)
 
                         data_source_soft_exact_match = {}
                         data_source_hard_exact_match = {}
-                        for eval_result in batch_eval_results:
-                            data_source = eval_result["data_source"]
+                        for train_result in batch_train_results:
+                            data_source = train_result["data_source"]
                             if data_source not in data_source_soft_exact_match:
                                 data_source_soft_exact_match[data_source] = []
                             if data_source not in data_source_hard_exact_match:
                                 data_source_hard_exact_match[data_source] = []
-                            soft_exact_match_score = eval_result["soft_exact_match"]
-                            hard_exact_match_score = eval_result["hard_exact_match"]
+                            soft_exact_match_score = train_result["soft_exact_match"]
+                            hard_exact_match_score = train_result["hard_exact_match"]
                             data_source_soft_exact_match[data_source].append(soft_exact_match_score)
                             data_source_hard_exact_match[data_source].append(hard_exact_match_score)
 
@@ -1173,8 +1230,8 @@ class RayPPOTrainer(object):
                             metrics[f"train/hard_exact_match/{data_source}"] = np.mean(scores)
 
                         batch.batch['token_level_scores'] = reward_tensor
-                        for eval_result in batch_eval_results:
-                            for name, rewards in eval_result.items():
+                        for train_result in batch_train_results:
+                            for name, rewards in train_result.items():
                                 # metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
                                 if "reward" not in name:
                                     continue
@@ -1244,10 +1301,8 @@ class RayPPOTrainer(object):
                 logger.log(data=metrics, step=self.global_steps)
 
                 if self.config.algorithm.domain_sampling.enable:
-                    # calculate domain sampling weights
-                    # TODO: implement domain sampling weights
                     # update domain sampler
-                    self.sampler.update_weights(weights=domain_weights)
+                    self.sampler.update_weights(weights=latest_domain_weights)
 
                 if is_last_step:
                     pprint(f'Final validation metrics: {last_val_metrics}')

@@ -188,7 +188,7 @@ algorithm:
     enable: True
     metric: seq_reward
     num_domain: 8  # \mathcal{D} = \{d_1, d_2, \cdots, d_n\}
-    domains: ["prontoqa", "proofwriter", "clutrr", "folio", "logic_nli", "logical_deduction", "ar_lsat", "logiqa"]
+    domains: ["prontoqa","proofwriter","clutrr","folio","logic_nli","logical_deduction","ar_lsat","logiqa"]
     init_weight_method: average  # weight sampling method for each domain
     weight_level: episode  # conduct re-weight & sample at each [step/episode/epoch] 
     normalize: softmax

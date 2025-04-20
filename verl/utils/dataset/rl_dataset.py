@@ -519,6 +519,8 @@ class DomainSampler:
             remaining -= count
 
         # Distribute remaining samples to highest weight domains
+        print("domains:", self.domains)
+        print("domain_weights:", self.domain_weights)
         sorted_domains = sorted(
             self.domains, key=lambda d: self.domain_weights[d], reverse=True
         )
@@ -548,6 +550,7 @@ class DomainSampler:
         if weights is None:
             return
         self.domain_weights = weights
+        self.domains = list(weights.keys())
         # Re-calculate how many samples from each domain should be in a batch
         self.domain_counts = {}
         remaining = self.batch_size

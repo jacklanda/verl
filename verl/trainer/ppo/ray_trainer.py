@@ -19,6 +19,7 @@ This trainer supports model-agonistic model initialization with huggingface
 import os
 import json
 import uuid
+import math
 from datetime import datetime
 from collections import defaultdict
 from contextlib import contextmanager
@@ -913,7 +914,7 @@ class RayPPOTrainer(object):
         # Step 1. retrieve the rewards for each domain
         rewards_by_domain = dict()
         for item in batch_reward:
-            domain = item['data_source']
+            domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
             rewards = item['rewards']
             if domain not in rewards_by_domain:
                 rewards_by_domain[domain] = []

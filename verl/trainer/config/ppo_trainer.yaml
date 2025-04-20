@@ -185,7 +185,7 @@ algorithm:
     metric: seq_reward # score / seq_reward / seq_final_reward / ...
     max_num_gen_batches: 8 # Non-positive values mean no upper limit
   domain_sampling:
-    enable: True
+    enable: False
     metric: seq_reward
     num_domain: 8  # \mathcal{D} = \{d_1, d_2, \cdots, d_n\}
     domains: ["prontoqa", "proofwriter", "clutrr", "folio", "boxes", "logic_nli", "logical_deduction", "ar_lsat"]

@@ -197,7 +197,7 @@ def grade_language_repetition(
     # Ensure the reward stays within [-1, 0]
     scaled_reward = max(-1, min(0, scaled_reward))
 
-    repetition_rewards = 0.0 if scaled_reward > -0.8 else scaled_reward
+    repetition_rewards = 0.0 if scaled_reward > -0.6 else scaled_reward
 
     return repetition_rewards
 
@@ -260,6 +260,7 @@ def compute_score(
         "hard_exact_match": acc_reward_score,
     }
 
-    rewards = acc_reward_score + format_reward_score + language_repetition_score
+    rewards = acc_reward_score + format_reward_score
+    # rewards = acc_reward_score + format_reward_score + language_repetition_score
 
     return rewards, eval_result

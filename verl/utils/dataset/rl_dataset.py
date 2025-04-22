@@ -312,7 +312,7 @@ class DomainWeightedRLHFDataset(Dataset):
         # Create mapping from flat index to (domain, domain_index)
         self.index_mapping = []
         for domain, dataframe in self.domain_dataframes.items():
-            domain_start_idx = len(self.index_mapping)
+            _ = len(self.index_mapping)
             for i in range(len(dataframe)):
                 self.index_mapping.append((domain, i))
 
@@ -519,8 +519,6 @@ class DomainSampler:
             remaining -= count
 
         # Distribute remaining samples to highest weight domains
-        print("domains:", self.domains)
-        print("domain_weights:", self.domain_weights)
         sorted_domains = sorted(
             self.domains, key=lambda d: self.domain_weights[d], reverse=True
         )

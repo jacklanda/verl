@@ -923,7 +923,7 @@ class RayPPOTrainer(object):
         # Step 2. calculate sum of rewards from the batch by domain
         rewards_sum = dict()
         for item in batch_reward:
-            domain = item['data_source']
+            domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
             rewards = item['rewards']
             if domain not in rewards_sum:
                 rewards_sum[domain] = 0.0
@@ -1015,6 +1015,9 @@ class RayPPOTrainer(object):
         batch = None
         num_prompt_in_batch = 0
         num_gen_batches = 0
+        latest_domain_weights = self.sampler.domain_weights
+        train_batch_domain_weights = {f"train/domain_weights/{k}": v for k, v in latest_domain_weights.items()}
+        logger.log(data=train_batch_domain_weights, step=0)
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
                 metrics = {}
@@ -1181,6 +1184,12 @@ class RayPPOTrainer(object):
                                     "rewards": item["correctness_rewards"],
                                 }
                                 batch_rewards.append(reward_items)
+                            last_domain_weights = self.sampler.domain_weights
+                            last_train_domain_weights = {
+                                f"train/domain_weights/{k}": v for k, v in last_domain_weights.items()
+                            }
+                            if self.global_steps != 0:
+                                logger.log(data=last_train_domain_weights, step=self.global_steps)
                             latest_domain_weights: Dict[str, float] = self.compute_weights(batch_rewards)
 
                     # recompute old_log_probs

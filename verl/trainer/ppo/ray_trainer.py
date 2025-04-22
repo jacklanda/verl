@@ -403,20 +403,17 @@ class RayPPOTrainer(object):
         if self.config.algorithm.domain_sampling.enable:
             domain_sampling_config = self.config.algorithm.domain_sampling
             domains = domain_sampling_config.domains
-            if domain_sampling_config.init_weight_method == "average":
-                domain_weights = {
-                    domain: 1.0 / len(domains) for domain in domains
-                }
+
             # create the domain dataset
             domain_parquet_files = defaultdict(list)
             for domain in domains:
                 for file in self.config.data.train_files:
                     if domain in file:
                         domain_parquet_files[domain].append(file)
+
             print(f"[Train DataLoader] Domain sampling enabled. Domain parquet files: {domain_parquet_files}")
             self.train_dataset = DomainWeightedRLHFDataset(
                 domain_parquet_files=domain_parquet_files,
-                domain_weights=domain_weights,
                 tokenizer=self.tokenizer,
                 processor=self.processor,
                 prompt_key=self.config.data.prompt_key,
@@ -428,15 +425,44 @@ class RayPPOTrainer(object):
                 filter_overlong_prompts=self.config.data.filter_overlong_prompts,
             )
 
+            # Initialize domain weights
+            if domain_sampling_config.init_weight_method == "average":
+                # method 1. compute the domain weights by the average of domain data nums
+                domain_weights = {
+                    domain: 1.0 / len(domains) for domain in domains
+                }
+            elif domain_sampling_config.init_weight_method == "inverse":
+                # method 2. compute the domain weights by the square of inverse ratio of domain data nums
+                domain_weights = {
+                    domain: 1.0 / math.sqrt(self.train_dataset.get_domain_size(domain))
+                    for domain in domains
+                }
+                # normalize the weights
+                total_weight = sum(domain_weights.values())
+                domain_weights = {domain: weight / total_weight for domain, weight in domain_weights.items()}
+            elif domain_sampling_config.init_weight_method == "softmax_inverse":
+                # method 3. method 2 + softmax normalization
+                domain_weights = {
+                    domain: math.exp(1.0 / math.sqrt(self.train_dataset.get_domain_size(domain)))
+                    for domain in domains
+                }
+                # normalize the weights
+                total_weight = sum(domain_weights.values())
+                domain_weights = {domain: weight / total_weight for domain, weight in domain_weights.items()}
+
             # Create the sampler
-            sampler = DomainSampler(self.train_dataset, self.config.data.train_batch_size)
+            sampler = DomainSampler(
+                dataset=self.train_dataset,
+                batch_size=self.config.data.train_batch_size,
+                domain_weights=domain_weights
+            )
             self.sampler = sampler
 
             # Create the dataloader
             self.train_dataloader = StatefulDataLoader(
                 dataset=self.train_dataset,
                 batch_sampler=sampler,
-                num_workers=8,
+                num_workers=0,
                 collate_fn=collate_fn,
             )
             print("[Train DataLoader] Employing domain sampling for training dataloader.")
@@ -967,11 +993,12 @@ class RayPPOTrainer(object):
             domain: count / len(batch["domain"])
             for domain, count in domain_counts.items()
         }
+        target_domain_weights = self.sampler.domain_weights if self.global_steps > 1 else {k: None for k in domain_counts.keys()}
 
-        print(f"Batch size: {len(batch['domain'])}")
-        print(f"Domain counts: {domain_counts}")
-        print(f"Domain weights in batch: {domain_weights_in_batch}")
-        print(f"Target domain weights: {self.sampler.domain_weights}")
+        print(f"\nNew train batch (bsz={len(batch['domain'])})")
+        print(f"Samples: {domain_counts}")
+        print(f"Applied domain weights: {domain_weights_in_batch}")
+        print(f"Target domain weights: {target_domain_weights}")
 
     def fit(self):
         """
@@ -1004,6 +1031,11 @@ class RayPPOTrainer(object):
             if self.config.trainer.get('val_only', False):
                 return
 
+        # log the initial domain weights
+        latest_domain_weights = self.sampler.domain_weights
+        train_batch_domain_weights = {f"train/domain_weights/{k}": v for k, v in latest_domain_weights.items()}
+        logger.log(data=train_batch_domain_weights, step=self.global_steps)
+
         # add tqdm
         progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
 
@@ -1015,15 +1047,13 @@ class RayPPOTrainer(object):
         batch = None
         num_prompt_in_batch = 0
         num_gen_batches = 0
-        latest_domain_weights = self.sampler.domain_weights
-        train_batch_domain_weights = {f"train/domain_weights/{k}": v for k, v in latest_domain_weights.items()}
-        logger.log(data=train_batch_domain_weights, step=0)
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
                 metrics = {}
 
                 if self.config.algorithm.domain_sampling.enable:
                     self.display_batch_constituents(batch_dict)
+
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_gen_batches += 1
                 # pop those keys for generation
@@ -1188,9 +1218,12 @@ class RayPPOTrainer(object):
                             last_train_domain_weights = {
                                 f"train/domain_weights/{k}": v for k, v in last_domain_weights.items()
                             }
-                            if self.global_steps != 0:
-                                logger.log(data=last_train_domain_weights, step=self.global_steps)
-                            latest_domain_weights: Dict[str, float] = self.compute_weights(batch_rewards)
+                            if self.global_steps > 0:
+                                metrics.update(last_train_domain_weights)
+                            if self.global_steps % self.config.algorithm.domain_sampling.update_steps == 0:
+                                # print(f"Update domain weights at step {self.global_steps} ...")
+                                latest_domain_weights: Dict[str, float] = self.compute_weights(batch_rewards)
+                                # print(f"Next-batch domain weights: {latest_domain_weights}")
 
                     # recompute old_log_probs
                     with _timer('old_log_prob', timing_raw):

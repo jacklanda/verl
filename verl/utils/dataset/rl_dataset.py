@@ -241,7 +241,6 @@ class DomainWeightedRLHFDataset(Dataset):
     def __init__(
         self,
         domain_parquet_files: Dict[str, Union[str, List[str]]],
-        domain_weights: Dict[str, float],
         tokenizer: PreTrainedTokenizer,
         processor: Optional[ProcessorMixin] = None,
         prompt_key="prompt",
@@ -259,7 +258,6 @@ class DomainWeightedRLHFDataset(Dataset):
 
         Args:
             domain_parquet_files: Dictionary mapping domain names to parquet file paths
-            domain_weights: Dictionary mapping domain names to sampling weights
             tokenizer: Tokenizer for processing text
             processor: Optional processor for multi-modal data
             prompt_key: Key for prompts in the parquet files
@@ -272,17 +270,8 @@ class DomainWeightedRLHFDataset(Dataset):
             truncation: How to handle truncation
             filter_overlong_prompts: Whether to filter overlong prompts
         """
-        self.domain_weights = domain_weights
-        self.domains = list(domain_weights.keys())
-
         # Validate domains
-        print(f"Domains: {self.domains}")
         print(f"Domain parquet files: {domain_parquet_files}")
-        for domain in self.domains:
-            if domain not in domain_parquet_files:
-                raise ValueError(
-                    f"Domain '{domain}' specified in weights but not in parquet files"
-                )
 
         self.tokenizer = tokenizer
         self.processor = processor
@@ -385,6 +374,12 @@ class DomainWeightedRLHFDataset(Dataset):
             print(
                 r"Old dataloader checkpoint file is used, please train from scratch for better checkpoint performance"
             )
+
+    def get_domain_size(self, domain: str) -> int:
+        """Return the size of a specific domain."""
+        if domain not in self.domain_dataframes:
+            raise ValueError(f"Domain '{domain}' not found in dataset.")
+        return len(self.domain_dataframes[domain])
 
     def __len__(self):
         """Return the total number of samples across all domains."""
@@ -497,6 +492,7 @@ class DomainSampler:
         self,
         dataset: DomainWeightedRLHFDataset,
         batch_size: int,
+        domain_weights: Optional[Dict[str, float]] = None,
     ):
         """
         Initialize a domain sampler.
@@ -507,8 +503,8 @@ class DomainSampler:
         """
         self.dataset = dataset
         self.batch_size = batch_size
-        self.domain_weights = dataset.domain_weights
-        self.domains = dataset.domains
+        self.domain_weights = domain_weights
+        self.domains = list(domain_weights.keys())
 
         # Calculate how many samples from each domain should be in a batch
         self.domain_counts = {}

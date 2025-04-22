@@ -194,11 +194,10 @@ algorithm:
     normalize: softmax
     update_steps: 1  # update weights every * steps
     reward_buffer_size: 1  # buffer (queue) size for reward tracking
+    history_rewards_decay: True
     epsilon: 1e-1  # 1e-2 for domains <= 10, 1e-3 for > 10 domains
     tau: 0.8  # control the magnitude of weight 
     target_value: 0.9  # i.e. r_{target}, control the potential optimization of reward
-    activation_threshold: 0.7
-    early_quit_threshold: 0.9
 
 trainer:
   balance_batch: True

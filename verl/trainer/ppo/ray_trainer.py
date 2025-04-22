@@ -21,7 +21,7 @@ import json
 import uuid
 import math
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -928,7 +928,7 @@ class RayPPOTrainer(object):
                                                     prefix=logging_prefix)
         metrics.update(global_balance_stats)
 
-    def compute_weights(self, batch_reward: List[Dict[str, str | float]]) -> Dict[str, float]:
+    def compute_weights(self) -> Dict[str, float]:
         """
         Compute the weights for each sample in the batch based on the reward values.
         """
@@ -937,9 +937,37 @@ class RayPPOTrainer(object):
         tau = self.config.algorithm.domain_sampling.tau
         normalize = self.config.algorithm.domain_sampling.normalize
 
+        # Step 0. accumulate the rewards in the buffer
+        if self.config.algorithm.domain_sampling.history_rewards_decay:
+            # decay the rewards in the buffer
+            # by 1/2 for the previous, by 1/3 for the previous 2, ...
+            history_rewards = []
+            # iterate from right to left
+            idx = 0
+            for i in range(len(self.reward_buffer) - 1, -1, -1):
+                history_batch_rewards = self.reward_buffer[i]
+                if i == len(self.reward_buffer) - 1:
+                    decay = 1.0
+                else:
+                    decay = 1.0 / (idx + 2)
+                    idx += 1
+                history_batch_rewards_decay = [
+                    {
+                        'data_source': item['data_source'],
+                        'rewards': item['rewards'] * decay
+                    }
+                    for item in history_batch_rewards
+                ]
+                history_rewards.extend(history_batch_rewards_decay)
+        else:
+            history_rewards = [
+                item for item in history_batch_reward
+                for history_batch_reward in self.reward_buffer
+            ]
+
         # Step 1. retrieve the rewards for each domain
         rewards_by_domain = dict()
-        for item in batch_reward:
+        for item in history_rewards:
             domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
             rewards = item['rewards']
             if domain not in rewards_by_domain:
@@ -948,7 +976,7 @@ class RayPPOTrainer(object):
 
         # Step 2. calculate sum of rewards from the batch by domain
         rewards_sum = dict()
-        for item in batch_reward:
+        for item in history_rewards:
             domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
             rewards = item['rewards']
             if domain not in rewards_sum:
@@ -1016,6 +1044,14 @@ class RayPPOTrainer(object):
                           run_id=self.config.trainer.run_id)
 
         self.logger = logger
+
+        if self.config.algorithm.domain_sampling.enable:
+            self.reward_buffer_size = self.config.algorithm.domain_sampling.reward_buffer_size
+            assert isinstance(self.reward_buffer_size, int), \
+                f"reward_buffer_size must be int type, but got {type(self.reward_buffer_size)}"
+            assert self.reward_buffer_size > 0, \
+                f"reward_buffer_size must be greater than 0, but got {self.reward_buffer_size}"
+            self.reward_buffer = deque(maxlen=self.reward_buffer_size)
 
         self.global_steps = 0
 
@@ -1222,7 +1258,8 @@ class RayPPOTrainer(object):
                                 metrics.update(last_train_domain_weights)
                             if self.global_steps % self.config.algorithm.domain_sampling.update_steps == 0:
                                 # print(f"Update domain weights at step {self.global_steps} ...")
-                                latest_domain_weights: Dict[str, float] = self.compute_weights(batch_rewards)
+                                self.reward_buffer.append(batch_rewards)
+                                latest_domain_weights: Dict[str, float] = self.compute_weights()
                                 # print(f"Next-batch domain weights: {latest_domain_weights}")
 
                     # recompute old_log_probs

@@ -539,7 +539,7 @@ class DomainSampler:
         """Return the current domain weights."""
         return self.domain_weights
 
-    def update_weights(self, weights: Optional[Dict[str, float]]=None):
+    def update_weights(self, weights: Optional[Dict[str, float]]=None) -> None:
         """Update the domain weights."""
         if weights is None:
             return

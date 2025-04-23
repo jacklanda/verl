@@ -191,10 +191,10 @@ algorithm:
     weight_level: step  # conduct re-weight & sample at each [step/episode/epoch] 
     weight_update_steps: 8  # update weights every * steps
     reward_buffer_size: 8  # buffer (queue) size for reward tracking
-    history_rewards_decay: True
+    history_rewards_decay_strategy: "harmonic_series"  # [harmonic_series/geometric_series]
     epsilon: 1e-1  # 1e-2 for domains <= 10, 1e-3 for > 10 domains
-    tau: 0.8  # control the magnitude of weight 
-    target_reward: 0.9  # i.e. r_{target}, control the potential optimization of reward
+    tau: 0.8  # \tau controls the magnitude of weight 
+    target_reward_factor: 0.9  # i.e. \alpha * r_{target}, control the potential optimization of reward
 
 trainer:
   balance_batch: True

@@ -932,76 +932,114 @@ class RayPPOTrainer(object):
         """
         Compute the weights for each sample in the batch based on the reward values.
         """
-        eps = self.config.algorithm.domain_sampling.epsilon
-        target_reward = self.config.algorithm.domain_sampling.target_reward
-        tau = self.config.algorithm.domain_sampling.tau
+        domain_sampling_config = self.config.algorithm.domain_sampling
 
-        # Step 0. accumulate the rewards in the buffer
-        if self.config.algorithm.domain_sampling.history_rewards_decay:
-            # decay the rewards in the buffer
-            # by 1/2 for the previous, by 1/3 for the previous 2, ...
+        eps = domain_sampling_config.epsilon
+        tau = domain_sampling_config.tau
+        reward_buffer_size = self.reward_buffer_size
+        history_rewards_decay_strategy = (
+            domain_sampling_config.history_rewards_decay_strategy
+        )
+        target_reward_factor = domain_sampling_config.target_reward_factor
+
+        assert history_rewards_decay_strategy in [
+            "harmonic_series",
+            "exponential",
+            None,
+        ], f"Invalid history rewards decay strategy: {history_rewards_decay_strategy}"
+
+        assert target_reward_factor > 0 and target_reward_factor <= 1, \
+            f"Invalid target reward factor: {target_reward_factor}"
+
+        # Step 0. accumulate rewards in the buffer
+        if history_rewards_decay_strategy is None:
+            # we do not decay the rewards in the buffer
+            target_rewards = (
+                len(self.reward_buffer) * target_reward_factor
+            )
+            history_rewards = [
+                item
+                for history_batch_reward in self.reward_buffer
+                for item in history_batch_reward
+            ]
+        else:
             history_rewards = []
+
+            if history_rewards_decay_strategy == "harmonic_series":
+                # decay the rewards in the buffer
+                # by 1/2 for the previous, by 1/3 for the previous 2, ...
+                target_rewards = (
+                    sum(1 / i for i in range(1, reward_buffer_size + 1))
+                    * target_reward_factor
+                )
+            elif history_rewards_decay_strategy == "geometric_series":
+                # decay the rewards in the buffer
+                # by 1/2 for the previous, by 1/4 for the previous 2, ...
+                target_rewards = (
+                    sum(0.5**i for i in range(reward_buffer_size))
+                    * target_reward_factor
+                )
+
             # iterate from right to left
+            # (i.e., from the most recent batch to the oldest batch) to decay the rewards
             idx = 0
             for i in range(len(self.reward_buffer) - 1, -1, -1):
                 history_batch_rewards = self.reward_buffer[i]
                 if i == len(self.reward_buffer) - 1:
                     decay = 1.0
                 else:
-                    decay = 1.0 / (idx + 2)
+                    decay = (
+                        1.0 / (idx + 2)
+                        if history_rewards_decay_strategy == "harmonic_series"
+                        else 0.5 ** (idx + 1)
+                    )
                     idx += 1
                 history_batch_rewards_decay = [
                     {
-                        'data_source': item['data_source'],
-                        'rewards': item['rewards'] * decay
+                        "data_source": item["data_source"],
+                        "rewards": item["rewards"] * decay,
                     }
                     for item in history_batch_rewards
                 ]
                 history_rewards.extend(history_batch_rewards_decay)
-        else:
-            history_rewards = [
-                item for history_batch_reward in self.reward_buffer
-                for item in history_batch_reward
-            ]
 
-        # Step 1. retrieve the rewards for each domain
+        # Step 1. retrieve rewards & compute the sum of rewards for each domain
+        rewards_sum = dict()
         rewards_by_domain = dict()
         for item in history_rewards:
-            domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
-            rewards = item['rewards']
+            domain = item["data_source"].lower().replace("-", "_").replace(" ", "_")
+            rewards = item["rewards"]
+            if domain not in rewards_sum:
+                rewards_sum[domain] = 0.0
+            rewards_sum[domain] += rewards
             if domain not in rewards_by_domain:
                 rewards_by_domain[domain] = []
             rewards_by_domain[domain].append(rewards)
 
-        # Step 2. calculate sum of rewards from the batch by domain
-        rewards_sum = dict()
-        for item in history_rewards:
-            domain = item['data_source'].lower().replace("-", "_").replace(" ", "_")
-            rewards = item['rewards']
-            if domain not in rewards_sum:
-                rewards_sum[domain] = 0.0
-            rewards_sum[domain] += rewards
-
-        # Step 3. calculate the algebra mean of the rewards ($\hat{r}_i$) for each domain
+        # Step 2. calculate the algebraic mean of $\bar{r}_i$ and $\bar{r}_{target}$
         rewards_mean = dict()
         for domain, rewards in rewards_sum.items():
             rewards_mean[domain] = rewards / len(rewards_by_domain[domain])
+        target_reward = target_rewards / reward_buffer_size
 
-        # Step 4. calculate the value (i.e., underfit degree) of each domain ($v_i$):
+        # Step 3. calculate the value (i.e., underfit degree) of each domain ($v_i$):
         # $v_i = max(0, r_{target} - \hat{r}_i)$
         value_by_domain = dict()
-        for domain, rewards in rewards_mean.items():
-            value_by_domain[domain] = max(0, target_reward - rewards)
+        for domain, mean_reward in rewards_mean.items():
+            # $\bar{r}_{target}$ is not always larger than $\bar{r}_i$ due to the existence of factor
+            value_by_domain[domain] = max(0, target_reward - mean_reward)
 
-        # Step 5. calculate the unnormalized weight of each domain ($w_i$): $w_i = exp((v_i + eps) / \tau)$
+        # Step 4. calculate the unnormalized weight of each domain ($w_i$): $w_i = exp((v_i + eps) / \tau)$
         unnorm_weights_by_domain = dict()
         for domain, value in value_by_domain.items():
             unnorm_weights_by_domain[domain] = math.exp((value + eps) / tau)
 
-        # Step 6. calculate the normalized weight of each domain ($w_i$): $w_i = w_i / \sum_{j=1}^k w_j$
+        # Step 5. calculate the normalized weight of each domain ($w_i$): $w_i = w_i / \sum_{j=1}^k w_j$
         norm_weights_by_domain = dict()
         for domain, unnorm_weight in unnorm_weights_by_domain.items():
-            norm_weights_by_domain[domain] = unnorm_weight / sum(unnorm_weights_by_domain.values())
+            norm_weights_by_domain[domain] = unnorm_weight / sum(
+                unnorm_weights_by_domain.values()
+            )
 
         return norm_weights_by_domain
 

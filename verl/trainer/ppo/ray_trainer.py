@@ -1023,7 +1023,7 @@ class RayPPOTrainer(object):
         target_reward = target_rewards / reward_buffer_size
 
         # Step 3. calculate the value (i.e., underfit degree) of each domain ($v_i$):
-        # $v_i = max(0, r_{target} - \hat{r}_i)$
+        # $v_i = max(0, r_{target} - \bar{r}_i)$
         value_by_domain = dict()
         for domain, mean_reward in rewards_mean.items():
             # $\bar{r}_{target}$ is not always larger than $\bar{r}_i$ due to the existence of factor

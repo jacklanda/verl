@@ -940,7 +940,7 @@ class RayPPOTrainer(object):
         history_rewards_decay_strategy = (
             domain_sampling_config.history_rewards_decay_strategy
         )
-        target_reward_factor = domain_sampling_config.target_reward_factor
+        target_reward_base = domain_sampling_config.target_reward_base
 
         assert history_rewards_decay_strategy in [
             "harmonic_series",
@@ -948,14 +948,14 @@ class RayPPOTrainer(object):
             None,
         ], f"Invalid history rewards decay strategy: {history_rewards_decay_strategy}"
 
-        assert target_reward_factor > 0 and target_reward_factor <= 1, \
-            f"Invalid target reward factor: {target_reward_factor}"
+        assert target_reward_base > 0 and target_reward_base <= 1, \
+            f"Invalid target reward factor: {target_reward_base}"
 
         # Step 0. accumulate rewards in the buffer
         if history_rewards_decay_strategy is None:
             # we do not decay the rewards in the buffer
             target_rewards = (
-                len(self.reward_buffer) * target_reward_factor
+                len(self.reward_buffer) * target_reward_base
             )
             history_rewards = [
                 item
@@ -965,19 +965,20 @@ class RayPPOTrainer(object):
         else:
             history_rewards = []
 
+            # the series serve as decay factors \alpha in the paper
             if history_rewards_decay_strategy == "harmonic_series":
                 # decay the rewards in the buffer
                 # by 1/2 for the previous, by 1/3 for the previous 2, ...
                 target_rewards = (
                     sum(1 / i for i in range(1, reward_buffer_size + 1))
-                    * target_reward_factor
+                    * target_reward_base
                 )
             elif history_rewards_decay_strategy == "geometric_series":
                 # decay the rewards in the buffer
                 # by 1/2 for the previous, by 1/4 for the previous 2, ...
                 target_rewards = (
                     sum(0.5**i for i in range(reward_buffer_size))
-                    * target_reward_factor
+                    * target_reward_base
                 )
 
             # iterate from right to left

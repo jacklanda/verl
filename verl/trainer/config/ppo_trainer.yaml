@@ -186,18 +186,15 @@ algorithm:
     max_num_gen_batches: 8 # Non-positive values mean no upper limit
   domain_sampling:
     enable: True
-    metric: seq_reward
-    num_domain: 8  # \mathcal{D} = \{d_1, d_2, \cdots, d_n\}
     domains: ["prontoqa","proofwriter","clutrr","folio","logic_nli","logical_deduction","ar_lsat","logiqa"]
     init_weight_method: average  # weight sampling method for each domain
     weight_level: step  # conduct re-weight & sample at each [step/episode/epoch] 
-    normalize: softmax
-    update_steps: 1  # update weights every * steps
+    weight_update_steps: 8  # update weights every * steps
     reward_buffer_size: 8  # buffer (queue) size for reward tracking
     history_rewards_decay: True
     epsilon: 1e-1  # 1e-2 for domains <= 10, 1e-3 for > 10 domains
     tau: 0.8  # control the magnitude of weight 
-    target_value: 0.9  # i.e. r_{target}, control the potential optimization of reward
+    target_reward: 0.9  # i.e. r_{target}, control the potential optimization of reward
 
 trainer:
   balance_batch: True

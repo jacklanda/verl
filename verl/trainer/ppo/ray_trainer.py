@@ -933,9 +933,8 @@ class RayPPOTrainer(object):
         Compute the weights for each sample in the batch based on the reward values.
         """
         eps = self.config.algorithm.domain_sampling.epsilon
-        target_value = self.config.algorithm.domain_sampling.target_value
+        target_reward = self.config.algorithm.domain_sampling.target_reward
         tau = self.config.algorithm.domain_sampling.tau
-        normalize = self.config.algorithm.domain_sampling.normalize
 
         # Step 0. accumulate the rewards in the buffer
         if self.config.algorithm.domain_sampling.history_rewards_decay:
@@ -992,7 +991,7 @@ class RayPPOTrainer(object):
         # $v_i = max(0, r_{target} - \hat{r}_i)$
         value_by_domain = dict()
         for domain, rewards in rewards_mean.items():
-            value_by_domain[domain] = max(0, target_value - rewards)
+            value_by_domain[domain] = max(0, target_reward - rewards)
 
         # Step 5. calculate the unnormalized weight of each domain ($w_i$): $w_i = exp((v_i + eps) / \tau)$
         unnorm_weights_by_domain = dict()
@@ -1256,7 +1255,7 @@ class RayPPOTrainer(object):
                             }
                             if self.global_steps > 0:
                                 metrics.update(last_train_domain_weights)
-                            if self.global_steps % self.config.algorithm.domain_sampling.update_steps == 0:
+                            if self.global_steps % self.config.algorithm.domain_sampling.weight_update_steps == 0:
                                 # print(f"Update domain weights at step {self.global_steps} ...")
                                 self.reward_buffer.append(batch_rewards)
                                 latest_domain_weights: Dict[str, float] = self.compute_weights()

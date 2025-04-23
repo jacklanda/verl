@@ -961,8 +961,8 @@ class RayPPOTrainer(object):
                 history_rewards.extend(history_batch_rewards_decay)
         else:
             history_rewards = [
-                item for item in history_batch_reward
-                for history_batch_reward in self.reward_buffer
+                item for history_batch_reward in self.reward_buffer
+                for item in history_batch_reward
             ]
 
         # Step 1. retrieve the rewards for each domain

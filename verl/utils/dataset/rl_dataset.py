@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import uuid
 from omegaconf import ListConfig
 import os
 from typing import Dict, List, Union, Optional
@@ -71,6 +72,14 @@ def process_image(image: dict, max_pixels: int = 2048 * 2048, min_pixels: int = 
         image = image.convert('RGB')
 
     return image
+
+
+def generate_uuid5(s: str) -> str:
+    """
+    Generate a UUID5 hash from a string.
+    """
+    default_namespace_uuid = uuid.UUID('f9115e71-0a5d-42c3-9a6a-0a2f3d1e5c8b')
+    return str(uuid.uuid5(default_namespace_uuid, s))
 
 
 class RLHFDataset(Dataset):

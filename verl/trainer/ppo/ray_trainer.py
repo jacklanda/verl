@@ -43,7 +43,7 @@ from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.metric_utils import compute_data_metrics, compute_throughout_metrics, compute_timing_metrics, reduce_metrics
 from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path
-from verl.utils.dataset.rl_dataset import DomainWeightedRLHFDataset, DomainSampler, RLHFDataset, collate_fn
+from verl.utils.dataset.rl_dataset import DomainWeightedRLHFDataset, DomainSampler, RLHFDataset, collate_fn, generate_uuid5
 from verl.utils.tracking import ValidationGenerationsLogger
 from torch.utils.data import RandomSampler, SequentialSampler
 from torchdata.stateful_dataloader import StatefulDataLoader
@@ -256,7 +256,6 @@ class RayPPOTrainer(object):
         self.reward_fn = reward_fn
         self.val_reward_fn = val_reward_fn
         self.logger = None
-        self.eval_times = 0
         self.eval_dir = f"outputs/{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
 
         self.hybrid_engine = config.actor_rollout_ref.hybrid_engine
@@ -658,9 +657,10 @@ class RayPPOTrainer(object):
             run_id = None
         eval_dir = self.eval_dir.replace("outputs/", f"outputs/{exp_name}-{run_id}-")
         os.makedirs(eval_dir, exist_ok=True)
-        with open(f"{eval_dir}/eval_{self.eval_times}.json", "w") as f:
+        with open(f"{eval_dir}/eval_global_step_{self.global_steps}.json", "w") as f:
             # add run_id for each eval_result in eval_results
             for i in range(len(eval_results)):
+                eval_results[i]['id'] = generate_uuid5(eval_results[i]['input'])
                 eval_results[i]['run_id'] = run_id
                 eval_results[i]['exp_name'] = exp_name
                 eval_results[i]['global_step'] = self.global_steps
@@ -673,7 +673,6 @@ class RayPPOTrainer(object):
                 eval_results_by_data_source[data_source].append(eval_result)
 
             json.dump(eval_results_by_data_source, f, ensure_ascii=False, indent=4)
-            self.eval_times += 1
 
         data_source_soft_exact_match = {}
         data_source_hard_exact_match = {}

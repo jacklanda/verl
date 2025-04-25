@@ -943,7 +943,7 @@ class RayPPOTrainer(object):
 
         assert history_rewards_decay_strategy in [
             "harmonic_series",
-            "exponential",
+            "geometric_series",
             None,
         ], f"Invalid history rewards decay strategy: {history_rewards_decay_strategy}"
 

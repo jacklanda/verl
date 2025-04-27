@@ -21,10 +21,26 @@ class NaiveRewardManager:
     """The reward manager.
     """
 
-    def __init__(self, tokenizer, num_examine, compute_score=None) -> None:
+    def __init__(
+        self,
+        tokenizer,
+        num_examine,
+        compute_score=None,
+        reward_fn_key="data_source",
+        max_resp_len=None,
+        overlong_buffer_cfg=None
+    ) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
+        self.reward_fn_key = reward_fn_key
+        self.overlong_buffer_cfg = overlong_buffer_cfg
+        self.max_resp_len = max_resp_len
+
+        if self.overlong_buffer_cfg is not None:
+            assert self.max_resp_len is not None, (
+                f"max_resp_len must be provided if {overlong_buffer_cfg=}, but got None"
+            )
 
     def verify(self, data):
         scores = []
@@ -107,7 +123,21 @@ class NaiveRewardManager:
                 ground_truth=ground_truth,
                 extra_info=extra_info,
             )
-            reward_tensor[i, valid_response_length - 1] = score
+
+            reward = score
+
+            if self.overlong_buffer_cfg.enable:
+                overlong_buffer_len = self.overlong_buffer_cfg.len
+                expected_len = self.max_resp_len - overlong_buffer_len
+                exceed_len = valid_response_length - expected_len
+                overlong_penalty_factor = self.overlong_buffer_cfg.penalty_factor
+                overlong_reward = min(-exceed_len / overlong_buffer_len * overlong_penalty_factor, 0)
+                reward += overlong_reward
+                if self.overlong_buffer_cfg.log:
+                    eval_result["overlong_reward"] = overlong_reward
+                    eval_result["overlong"] = overlong_reward < 0
+
+            reward_tensor[i, valid_response_length - 1] = reward
 
             eval_results.append(eval_result)
 

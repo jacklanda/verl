@@ -13,6 +13,7 @@ data:
   filter_overlong_prompts: False # for large-scale dataset, filtering overlong prompts could be timeconsuming. You should disable this and set `truncation='left'
   truncation: error
   image_key: images
+  reward_fn_key: data_source
 
 actor_rollout_ref:
   hybrid_engine: True
@@ -168,6 +169,7 @@ reward_model:
     enable: True
     len: 128
     penalty_factor: 1.0
+    log: True
 
 custom_reward_function:
   path: null

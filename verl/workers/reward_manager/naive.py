@@ -134,8 +134,9 @@ class NaiveRewardManager:
                 overlong_reward = min(-exceed_len / overlong_buffer_len * overlong_penalty_factor, 0)
                 reward += overlong_reward
                 if self.overlong_buffer_cfg.log:
-                    eval_result["overlong_reward"] = overlong_reward
-                    eval_result["overlong"] = overlong_reward < 0
+                    # convert to float for logging
+                    eval_result["overlong_rewards"] = float(overlong_reward)
+                    eval_result["overlong"] = float(overlong_reward < 0)
 
             reward_tensor[i, valid_response_length - 1] = reward
 

@@ -616,7 +616,6 @@ class RayPPOTrainer(object):
 
             # unpad
             test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
-            print('validation generation end')
 
             # Store generated outputs
             output_ids = test_output_gen_batch.batch['responses']
@@ -635,6 +634,8 @@ class RayPPOTrainer(object):
 
             reward_tensor_lst.append(reward_tensor)
             data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
+
+        print('validation generation end')
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
@@ -723,6 +724,11 @@ class RayPPOTrainer(object):
             )
             metric_dict["val/thinking_rewards"] = round(
                 sum([item["thinking_rewards"] for item in eval_results])
+                / len(eval_results),
+                5,
+            )
+            metric_dict["val/overlong_rewards"] = round(
+                sum([float(item["overlong_rewards"]) for item in eval_results])
                 / len(eval_results),
                 5,
             )
@@ -1350,7 +1356,7 @@ class RayPPOTrainer(object):
                         for train_result in batch_train_results:
                             for name, rewards in train_result.items():
                                 # metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
-                                if "reward" not in name:
+                                if "reward" not in name or "overlong" not in name:
                                     continue
                                 if name not in metrics:
                                     metrics[f"critic/{name}"] = 0

@@ -728,7 +728,7 @@ class RayPPOTrainer(object):
                 5,
             )
             metric_dict["val/overlong_rewards"] = round(
-                sum([float(item["overlong_rewards"]) for item in eval_results])
+                sum([float(item.get("overlong_rewards", 0)) for item in eval_results])
                 / len(eval_results),
                 5,
             )

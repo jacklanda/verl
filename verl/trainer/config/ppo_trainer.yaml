@@ -167,8 +167,8 @@ reward_model:
   reward_manager: naive
   overlong_buffer:
     enable: True
-    len: 128
-    penalty_factor: 1.0
+    len: 256
+    penalty_factor: 0.5
     log: True
 
 custom_reward_function:

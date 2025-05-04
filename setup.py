@@ -34,7 +34,7 @@ install_requires = [
   'pybind11',
   'pylatexenc',
   'ray[default]>=2.10',
-  'tensordict<=0.6.2',
+  'tensordict',
   'torchdata',
   'transformers',
   'wandb',
@@ -45,7 +45,7 @@ PRIME_REQUIRES = ['pyext']
 GEO_REQUIRES = ['mathruler']
 GPU_REQUIRES = ['liger-kernel', 'flash-attn']
 MATH_REQUIRES = ['math-verify']  # Add math-verify as an optional dependency
-VLLM_REQUIRES = ['tensordict<=0.6.2', 'vllm<=0.8.2']
+VLLM_REQUIRES = ['tensordict', 'vllm==0.8.5']
 SGLANG_REQUIRES = [
   'tensordict<=0.6.2', 
   'sglang[all]==0.4.4.post3',
